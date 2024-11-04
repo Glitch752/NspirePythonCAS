@@ -227,6 +227,17 @@ class TermSimplifier:
   
   def simplify(self):
     self.simplify_terms()
+
+    # Cancel any shared terms in the numerator and denominator
+    i = 0
+    while i < len(self.numerator_terms):
+      term = self.numerator_terms[i]
+      if term in self.denominator_terms:
+        self.numerator_terms.pop(i)
+        self.denominator_terms.remove(term)
+        i -= 1
+      i += 1
+
     return self
   
   def to_ast(self):    
