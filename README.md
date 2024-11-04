@@ -8,6 +8,8 @@ The simplification is relatively basic; it supports constant folding, basic iden
 
 Most of the code in this repository is written on my calculator and exported to my computer, but I'm trying to avoid TI-specific Python modules to make it portable.
 
+The code isn't structured very well, but it's mostly me messing around, so I'm not super worried about making a robust codebase.
+
 ## Future ideas
 - [ ] Add better errors for the tokenizer and parser
 - [ ] Add more built-in functions
@@ -23,4 +25,10 @@ Most of the code in this repository is written on my calculator and exported to 
 - [ ] Add support for integrals (probably not going to happen)
 - [ ] Add support for limits (probably not going to happen)
 
-The code isn't structured very well, but it's mostly me messing around, so I'm not super worried about making a robust codebase.
+# Running
+You don't need to have a TI-NSpire to run this code; it's regular Python.
+You can run my (small) test suite with `python src/cas_tests.py`, or you can run the REPL with `python src/cas_repl.py`.
+`src/caslol.py` is just a file I use for testing.
+
+# Note
+I'm not certain the simplification or differentiation are perfect, so I wouldn't trust this for anything important. I've extensively compared its outputs to those of Wolfram|Alpha, though, and it seems to be correct.
