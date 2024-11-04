@@ -8,4 +8,19 @@ The simplification is relatively basic; it supports constant folding, basic iden
 
 Most of the code in this repository is written on my calculator and exported to my computer, but I'm trying to avoid TI-specific Python modules to make it portable.
 
+## Future ideas
+- [ ] Add better errors for the tokenizer and parser
+- [ ] Add more built-in functions
+- [ ] Support decimals and other number representations
+  - [ ] When parsing, decide between subtract and negative number so we don't need to use the `−` character
+- [ ] Add other functions (e.g. `tan`, `log`)
+- [ ] Add trig identities
+- [ ] Add exponentiation support
+- [ ] Internally represent numbers as rationals to avoid floating-point errors and allow exact simplification in more cases
+- [ ] Add support for non-primary variables of differentiation so we can take partial derivatives
+- [ ] Add the ability to solve equations for specific variables symbolically
+- [ ] Add the ability to solve systems of equations symbolically
+- [ ] Add support for integrals (probably not going to happen)
+- [ ] Add support for limits (probably not going to happen)
+
 The code isn't structured very well, but it's mostly me messing around, so I'm not super worried about making a robust codebase.
