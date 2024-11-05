@@ -88,6 +88,22 @@ class ExpressionSimplifier:
         for term in self.terms:
           for factor in com_den_factors:
             term.denominator_terms.remove(factor)
+      
+      # Combine like terms
+      # This is really inefficient, but it works.
+      # TODO: use a hash table or something
+      i = 0
+      while i < len(self.terms):
+        term = self.terms[i]
+        j = i + 1
+        while j < len(self.terms):
+          other = self.terms[j]
+          if term.numerator_terms == other.numerator_terms and term.denominator_terms == other.denominator_terms:
+            term.constant += other.constant
+            self.terms.pop(j)
+            j -= 1
+          j += 1
+        i += 1
 
       coefficients = []
       all_negative = True

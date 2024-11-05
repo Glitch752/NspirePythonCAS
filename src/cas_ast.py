@@ -24,7 +24,7 @@ class ASTNode:
   def __eq__(self, other):
     if type(self) != type(other):
       return False
-    for attr in vars(self):
+    for attr in self.__dict__:
       if getattr(self, attr) != getattr(other, attr):
         return False
     return True

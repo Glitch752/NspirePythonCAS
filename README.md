@@ -11,7 +11,8 @@ Most of the code in this repository is written on my calculator and exported to 
 The code isn't structured very well, but it's mostly me messing around, so I'm not super worried about making a robust codebase.
 
 ## Future ideas
-- [ ] Add better errors for the tokenizer and parser
+- [ ] Add better error handling for the tokenizer and parser
+- [ ] Make negative numbers in expressions more elegant; for example, we currently output stuff like `2+-3x` instead of `2-3x` and `-2+3x` instead of `3x-2`
 - [ ] Add more built-in functions
 - [ ] Support decimals and other number representations
   - [ ] When parsing, decide between subtract and negative number so we don't need to use the `−` character
