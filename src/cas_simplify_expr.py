@@ -259,12 +259,18 @@ class TermSimplifier:
   def to_ast(self):    
     numerator = list(self.numerator_terms)
     denominator = list(self.denominator_terms)
-    if len(numerator) == 0 or self.constant == 0:
+    if (len(numerator) == 0 and len(denominator) == 0) or self.constant == 0:
       return ASTNumber(self.constant)
-    chain = to_multiplication_chain(numerator)
-    numerator_ast = \
-      ASTMultiply(ASTNumber(self.constant), chain) \
-      if self.constant != 1 else chain
+    numerator_ast = None
+
+    if len(numerator) > 0:
+      chain = to_multiplication_chain(numerator)
+      numerator_ast = \
+        ASTMultiply(ASTNumber(self.constant), chain) \
+        if self.constant != 1 else chain
+    else:
+      numerator_ast = ASTNumber(self.constant)
+    
     if len(denominator) == 0:
       return numerator_ast
     return ASTDivide( # TODO: proper rationals?
