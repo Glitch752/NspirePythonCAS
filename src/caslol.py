@@ -7,11 +7,11 @@ str = "x*x*x"
 ast = parse_to_ast(str)
 
 print("Parsed:")
-ast.print(100)
+print(ast.pretty_str(100))
 
-print("\n\nParsed simplified:")
-simplified_ast = ast.simplify()
-simplified_ast.print(100)
+print("\nParsed simplified:")
+simplified_ast = ast.reduce()
+print(simplified_ast.pretty_str(100))
 
-print("\n\nDerivative for x:")
-simplified_ast.derivative("x").simplify().print(100)
+print("\nDerivative for x:")
+print(simplified_ast.derivative("x").reduce().pretty_str(100))

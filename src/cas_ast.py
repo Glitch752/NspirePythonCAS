@@ -17,10 +17,25 @@ def is_ast_expression(node):
 def is_ast_term(node):
   return isinstance(node, (ASTMultiply, ASTDivide))
 
+class SimplifyState:
+  def __init__(self, node=None):
+    self.parent = node
+  def parent_is_expression(self):
+    return is_ast_expression(self.parent)
+  def parent_is_term(self):
+    return is_ast_term(self.parent)
+  def after(self, node):
+    return SimplifyState(node)
+  def reduce(self, node):
+    return node.reduce(self)
+  def expand(self, node):
+    return node.expand(self)
+
 class ASTNode:
   precidence = 0
   def __init__(self):
     raise Exception("Implement me!")
+  
   def __eq__(self, other):
     if type(self) != type(other):
       return False
@@ -32,19 +47,24 @@ class ASTNode:
     return not self.__eq__(other)
   def __hash__(self):
     return hash(str(self))
+
+  def pretty_str(self, precidence):
+    raise Exception("Implement me!")
   def __str__(self):
     raise Exception("Implement me!")
+  
+  def negate(self):
+    return ASTMultiply(ASTNumber(-1), self)
 
-  def print(self, precidence):
-    raise Exception("Implement me!")
-  
-  def simplify_in_expr(self):
-    return self.simplify()
-  def simplify_in_term(self):
-    return self.simplify()
-  
+  # Don't override this; override reduce and expand instead
   def simplify(self):
+    return self.expand(SimplifyState()).reduce(SimplifyState())
+  def reduce(self, state):
     return self
+  def expand(self, state):
+    # TODO: Implement in subclasses
+    return self
+  
   def substitute(self, var, value):
     return self
   def eval(self):
@@ -56,13 +76,14 @@ class ASTNode:
 class ASTNumber(ASTNode):
   def __init__(self, number):
     self.number = number
-  def print(self, precidence):
-    if self.number == int(self.number):
-      print(str(int(self.number)), end="")
-    else:
-      print(str(self.number), end="")
+  
+  def pretty_str(self, precidence):
+    return str(int(self.number)) if int(self.number) == self.number else str(self.number)
   def __str__(self):
     return str(self.number)
+  
+  def negate(self):
+    return ASTNumber(self.number * -1)
   def eval(self):
     return self.number
   def derivative(self, var):
@@ -71,10 +92,12 @@ class ASTNumber(ASTNode):
 class ASTVariable(ASTNode):
   def __init__(self, name):
     self.name = name
-  def print(self, precidence):
-    print(self.name, end="")
+  
+  def pretty_str(self, precidence):
+    return self.name
   def __str__(self):
     return "(" + self.name + ")"
+  
   def substitute(self, var, value):
     if self.name == var:
       return value
@@ -82,21 +105,60 @@ class ASTVariable(ASTNode):
   def eval(self):
     raise Exception("Cannot evaluate variable")
   def derivative(self, var):
-    # TODO: non-primary variables
-    return ASTNumber(1)
+    if self.name == var:
+      return ASTNumber(1)
+    return ASTLebiniz(self.name, var, 1)
+
+class ASTLebiniz(ASTNode):
+  precidence = 6
+  def __init__(self, main, relative_to, degree):
+    self.main = main
+    self.relative_to = relative_to
+    self.degree = degree
+  
+  def pretty_str(self, precidence):
+    string = "d"
+    if self.degree != 1:
+      string += "^" + self.degree + " "
+    string += self.main
+    string += " / d" + self.relative_to
+    if self.degree != 1:
+      string += "^" + self.degree
+    if precidence < ASTLebiniz.precidence:
+      string = "(" + string + ")"
+    return string
+  def __str__(self):
+    if self.degree != 1:
+      return "(d^" + self.degree + " " + self.main + " / d" + self.relative_to + "^" + self.degree + ")"
+    return "(d" + self.main + "/d" + self.relative_to + ")"
+  
+  def substitute(self, var, value):
+    return self
+  def eval(self):
+    raise Exception("Cannot evaluate rate of change")
+  def derivative(self, var):
+    if self.main == var:
+      return ASTLebiniz(self.main, self.relative_to, self.degree+1)
+    return ASTMultiply(
+      ASTLebiniz(self.main, var, 1),
+      self
+    ).simplify()
 
 class ASTFunctionCall(ASTNode):
   def __init__(self, name, argument):
     self.name = name
     self.argument = argument
-  def print(self, precidence):
-    print(self.name+"(", end="")
-    self.argument.print(100)
-    print(")", end="")
+  
+  def pretty_str(self, precidence):
+    return self.name + "(" + self.argument.pretty_str(100) + ")"
   def __str__(self):
     return self.name + "(" + str(self.argument) + ")"
-  def simplify(self):
-    return ASTFunctionCall(self.name, self.argument.simplify())
+  
+  def reduce(self, state):
+    return ASTFunctionCall(self.name, self.argument.reduce(state.after(self)))
+  def expand(self, state):
+    return ASTFunctionCall(self.name, self.argument.expand(state.after(self)))
+
   def substitute(self, var, value):
     return ASTFunctionCall(self.name, self.argument.substitute(var, value))
   def eval(self):
@@ -124,31 +186,36 @@ class ASTAdd(ASTNode):
   def __init__(self, left, right):
     self.left = left
     self.right = right
-  def print(self, precidence):
+  
+  def pretty_str(self, precidence):
+    string = self.left.pretty_str(ASTAdd.precidence) + "+" + self.right.pretty_str(ASTAdd.precidence)
     if precidence < ASTAdd.precidence:
-      print("(", end="")
-    self.left.print(ASTAdd.precidence)
-    print("+", end="")
-    self.right.print(ASTAdd.precidence)
-    if precidence < ASTAdd.precidence:
-      print(")", end="")
+      string = "(" + string + ")"
+    return string
   def __str__(self):
     return "(" + str(self.left) + "+" + str(self.right) + ")"
-  def simplify_in_expr(self):
-    left = self.left.simplify_in_expr()
-    right = self.right.simplify_in_expr()
+
+  def reduce(self, state):
+    state = state.after(self)
+
+    left = self.left.reduce(state)
+    right = self.right.reduce(state)
     if is_ast_zero(left):
       return right
     if is_ast_zero(right):
       return left
     if is_ast_constant(left) and is_ast_constant(right):
       return ASTNumber(left.number + right.number)
-    return ASTAdd(left, right)
-  def simplify(self):
-    from cas_simplify_expr import ExpressionSimplifier
-    return ExpressionSimplifier(
-      self.simplify_in_expr()
-    ).simplify().to_ast()
+    simplified_self = ASTAdd(left, right)
+    if state.parent_is_expression():
+      return simplified_self
+    
+    from cas_simplify_expr import ExpressionReducer
+    return ExpressionReducer(simplified_self).reduce().to_ast().reduce(state)
+  def expand(self, state):
+    # TODO
+    return ASTAdd(self.left.expand(state), self.right.expand(state))
+  
   def substitute(self, var, value):
     return ASTAdd(
       self.left.substitute(var, value),
@@ -160,38 +227,52 @@ class ASTAdd(ASTNode):
     return ASTAdd(
      self.left.derivative(var),
      self.right.derivative(var)
-    )
+    ).simplify()
 
 class ASTSubtract(ASTNode):
   precidence = 4
   def __init__(self, left, right):
     self.left = left
     self.right = right
-  def print(self, precidence):
+  
+  def pretty_str(self, precidence):
+    string = self.left.pretty_str(ASTSubtract.precidence) + "-" + self.right.pretty_str(ASTSubtract.precidence-1)
     if precidence < ASTSubtract.precidence:
-      print("(", end="")
-    self.left.print(ASTSubtract.precidence)
-    print("-", end="")
-    self.right.print(ASTSubtract.precidence-1)
-    if precidence < ASTSubtract.precidence:
-      print(")", end="")
+      string = "(" + string + ")"
+    return string
   def __str__(self):
     return "(" + str(self.left) + "-" + str(self.right) + ")"
-  def simplify_in_expr(self):
-    left = self.left.simplify_in_expr()
-    right = self.right.simplify_in_expr()
+  
+  def negate(self):
+    return ASTSubtract(self.right, self.left)
+  
+  def reduce(self, state):
+    state = state.after(self)
+
+    left = self.left.reduce(state)
+    right = self.right.reduce(state)
     if is_ast_constant(left) and is_ast_constant(right):
       return ASTNumber(left.number - right.number)
     if is_ast_zero(left):
       return ASTMultiply(ASTNumber(-1), right)
     if is_ast_zero(right):
       return left
-    return ASTSubtract(left, right)
-  def simplify(self):
-    from cas_simplify_expr import ExpressionSimplifier
-    return ExpressionSimplifier(
-      self.simplify_in_expr()
-    ).simplify().to_ast()
+    if is_ast_constant(left) and left.number < 1:
+      return ASTSubtract(
+        right.negate(),
+        left.negate()
+      )
+    simplified_self = ASTSubtract(left, right)
+  
+    if state.parent_is_expression():
+      return simplified_self
+    
+    from cas_simplify_expr import ExpressionReducer
+    return ExpressionReducer(simplified_self).reduce().to_ast().reduce(state)
+  def expand(self, state):
+    # TODO
+    return ASTSubtract(self.left.expand(state), self.right.expand(state))
+  
   def substitute(self, var, value):
     return ASTSubtract(
       self.left.substitute(var, value),
@@ -203,37 +284,41 @@ class ASTSubtract(ASTNode):
     return ASTSubtract(
      self.left.derivative(var),
      self.right.derivative(var)
-    )
+    ).simplify()
 
 class ASTMultiply(ASTNode):
   precidence = 3
   def __init__(self, left, right):
     self.left = left
     self.right = right
-  def print(self, precidence):
+  
+  def pretty_str(self, precidence):
     left = self.left
     right = self.right
     if is_ast_constant(right) and not is_ast_constant(left):
-      temp = left
-      left = right
-      right = temp
+      (left, right) = (right, left)
     if is_ast_negative_one(left):
-      print("-", end="")
-      right.print(ASTMultiply.precidence)
-    else:
-      if precidence < ASTMultiply.precidence:
-        print("(", end="")
-      left.print(ASTMultiply.precidence)
-      if is_ast_constant(self.right) or is_ast_term_left_constant(self.right):
-       print("*", end="")
-      right.print(ASTMultiply.precidence)
-      if precidence < ASTMultiply.precidence:
-        print(")", end="")
+      return "-" + right.pretty_str(ASTMultiply.precidence)
+    add_multiply = is_ast_constant(self.right) or is_ast_term_left_constant(self.right)
+    string = left.pretty_str(ASTMultiply.precidence) + \
+      ("*" if add_multiply else "") + \
+      right.pretty_str(ASTMultiply.precidence)
+    if precidence < ASTMultiply.precidence:
+      string = "(" + string + ")"
+    return string
   def __str__(self):
     return "(" + str(self.left) + "*" + str(self.right) + ")"
-  def simplify_in_term(self):
-    left = self.left.simplify_in_term()
-    right = self.right.simplify_in_term()
+  
+  def negate(self):
+    if is_ast_constant(self.left):
+      return ASTMultiply(self.left.negate(), self.right)
+    return ASTMultiply(ASTNumber(-1), self)
+  
+  def reduce(self, state):
+    state = state.after(self)
+
+    left = self.left.reduce(state)
+    right = self.right.reduce(state)
     if is_ast_zero(left) or is_ast_zero(right):
       return ASTNumber(0)
     if is_ast_one(right):
@@ -242,12 +327,17 @@ class ASTMultiply(ASTNode):
       return right
     if is_ast_constant(left) and is_ast_constant(right):
       return ASTNumber(left.number * right.number)
-    return ASTMultiply(left, right)
-  def simplify(self):
-    from cas_simplify_expr import TermSimplifier
-    return TermSimplifier(
-      self.simplify_in_term()
-    ).simplify().to_ast()
+    simplified_self = ASTMultiply(left, right)
+
+    if state.parent_is_term():
+      return simplified_self
+  
+    from cas_simplify_expr import ExpressionTerm
+    return ExpressionTerm(simplified_self).reduce().to_ast().reduce(state)
+  def expand(self, state):
+    # TODO
+    return ASTMultiply(self.left.expand(state), self.right.expand(state))
+  
   def substitute(self, var, value):
     return ASTMultiply(
       self.left.substitute(var, value),
@@ -259,28 +349,49 @@ class ASTMultiply(ASTNode):
     return ASTAdd(
       ASTMultiply(self.left, self.right.derivative(var)),
       ASTMultiply(self.right, self.left.derivative(var))
-    )
+    ).simplify()
 
 class ASTDivide(ASTNode):
   precidence = 3
   def __init__(self, numerator, denominator):
     self.numerator = numerator
     self.denominator = denominator
-  def print(self, precidence):
+  
+  def pretty_str(self, precidence):
+    string = self.numerator.pretty_str(ASTDivide.precidence) + "/" + self.denominator.pretty_str(ASTDivide.precidence - 1)
     if precidence < ASTDivide.precidence:
-      print("(", end="")
-    self.numerator.print(ASTDivide.precidence)
-    print("/", end="")
-    self.denominator.print(ASTDivide.precidence)
-    if precidence < ASTDivide.precidence:
-      print(")", end="")
+      string = "(" + string + ")"
+    return string
   def __str__(self):
     return "(" + str(self.numerator) + "/" + str(self.denominator) + ")"
-  def simplify(self):
-    from cas_simplify_expr import TermSimplifier
-    return TermSimplifier(
-      self.simplify_in_term()
-    ).simplify().to_ast()
+  
+  def negate(self):
+    if is_ast_constant(self.numerator):
+      return ASTDivide(self.numerator.negate(), self.denominator)
+    return ASTMultiply(ASTNumber(-1), self)
+  
+  def reduce(self, state):
+    state = state.after(self)
+    
+    numerator = self.numerator.reduce(state)
+    denominator = self.denominator.reduce(state)
+    if is_ast_zero(numerator):
+      return ASTNumber(0)
+    if is_ast_one(denominator):
+      return numerator
+    if is_ast_constant(numerator) and is_ast_constant(denominator):
+      return ASTNumber(numerator.number / denominator.number)
+    simplified_self = ASTDivide(numerator, denominator)
+
+    if state.parent_is_term():
+      return simplified_self
+  
+    from cas_simplify_expr import ExpressionTerm
+    return ExpressionTerm(simplified_self).reduce().to_ast().reduce(state)
+  def expand(self, state):
+    # TODO
+    return ASTDivide(self.numerator.expand(state), self.denominator.expand(state))
+  
   def substitute(self, var, value):
     return ASTDivide(
       self.numerator.substitute(var, value),
@@ -288,16 +399,6 @@ class ASTDivide(ASTNode):
     )
   def eval(self):
     return self.numerator.eval() / self.denominator.eval()
-  def simplify_in_term(self):
-    numerator = self.numerator.simplify_in_term()
-    denominator = self.denominator.simplify_in_term()
-    if is_ast_zero(numerator):
-      return ASTNumber(0)
-    if is_ast_one(denominator):
-      return numerator
-    if is_ast_constant(numerator) and is_ast_constant(denominator):
-      return ASTNumber(numerator.number / denominator.number)
-    return ASTDivide(numerator, denominator)
   
   def derivative(self, var):
     return ASTDivide(
@@ -308,5 +409,4 @@ class ASTDivide(ASTNode):
       ),
       # ... / b**2
       ASTMultiply(self.denominator, self.denominator)
-    )
-
+    ).simplify()

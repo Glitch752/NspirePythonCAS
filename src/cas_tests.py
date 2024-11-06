@@ -72,6 +72,16 @@ def test_simplify(full, simplified, message, test_vars=["x"], no_zero_input=Fals
 def test_derivative(expr, var, expected, message):
   expect(parse_to_ast(expr).derivative(var), parse_to_ast(expected), message, [var])
 
+def test_pretty_str(expr, expected, message):
+  a = parse_to_ast(expr).pretty_str(100)
+  b = expected
+  if a != b:
+    print("Expected: " + b)
+    print("Got:      " + a)
+    print("\n")
+    raise Exception("Test " + message + " failed")
+  print("Test " + message + " passed!")
+
 
 test_eval("1+1", "2", "Eval 1")
 test_eval("2*3", "6", "Eval 2")
@@ -90,5 +100,11 @@ test_derivative("x*x", "x", "2*x", "Derivative 1")
 test_derivative("x*x*x", "x", "3*x*x", "Derivative 2")
 test_derivative("sin(2*x)+1", "x", "2*cos(2*x)", "Derivative 3")
 test_derivative("cos(sin(x))", "x", "−1*sin(sin(x))*cos(x)", "Derivative 4")
+
+test_pretty_str("x*x", "xx", "Pretty string 1")
+test_pretty_str("15*(x+1)", "15(x+1)", "Pretty string 2")
+test_pretty_str("(2*y)/(3*x*z)", "2y/(3xz)", "Pretty string 3")
+test_pretty_str("3*sin(2*x)", "3sin(2x)", "Pretty string 4")
+test_pretty_str("−1*x*x", "-xx", "Pretty string 5")
 
 print("All tests passed!")

@@ -25,7 +25,8 @@ def to_multiplication_chain(parts):
   
   return node
 
-class ExpressionSimplifier:
+# A class that simplifies a nested expression and its terms
+class ExpressionReducer:
   def __init__(self, topmost_node):
     self.common_terms = []
     self.node = topmost_node
@@ -35,7 +36,7 @@ class ExpressionSimplifier:
   def get_terms(self):
     node = self.node
     if not is_ast_expression(node):
-      self.terms = [TermSimplifier(node)]
+      self.terms = [ExpressionTerm(node)]
       return
     
     # (Subtracting, node)
@@ -48,17 +49,17 @@ class ExpressionSimplifier:
       if is_ast_expression(n[1].left):
         nodes.append((n[0], n[1].left))
       else:
-        (subtract if n[0] else add).append(TermSimplifier(n[1].left))
+        (subtract if n[0] else add).append(ExpressionTerm(n[1].left))
       if is_ast_expression(n[1].right):
         nodes.append((n[0] ^ (not adding), n[1].right))
       else:
-        (add if (n[0] ^ adding) else subtract).append(TermSimplifier(n[1].right))
+        (add if (n[0] ^ adding) else subtract).append(ExpressionTerm(n[1].right))
     
     self.terms = add
     for term in subtract:
       self.terms.append(term.negate())
   
-  def simplify(self):
+  def reduce(self):
     # Remove 0 terms
     i = 0
     while i < len(self.terms):
@@ -69,7 +70,23 @@ class ExpressionSimplifier:
     
     if len(self.terms) > 1:
       for i in range(len(self.terms)):
-        self.terms[i] = self.terms[i].simplify() # TODO: I don't think we technically need to simplify here
+        self.terms[i] = self.terms[i].reduce() # TODO: I don't think we technically need to reduce here
+      
+      # Combine like terms
+      # This is really inefficient, but it works.
+      # TODO: use a hash table or something
+      i = 0
+      while i < len(self.terms):
+        term = self.terms[i]
+        j = i + 1
+        while j < len(self.terms):
+          other = self.terms[j]
+          if term.numerator_terms == other.numerator_terms and term.denominator_terms == other.denominator_terms:
+            term.constant += other.constant
+            self.terms.pop(j)
+            j -= 1
+          j += 1
+        i += 1
       
       # Factor out common terms
       com_num_factors = set(self.terms[0].numerator_terms)
@@ -89,22 +106,6 @@ class ExpressionSimplifier:
           for factor in com_den_factors:
             term.denominator_terms.remove(factor)
       
-      # Combine like terms
-      # This is really inefficient, but it works.
-      # TODO: use a hash table or something
-      i = 0
-      while i < len(self.terms):
-        term = self.terms[i]
-        j = i + 1
-        while j < len(self.terms):
-          other = self.terms[j]
-          if term.numerator_terms == other.numerator_terms and term.denominator_terms == other.denominator_terms:
-            term.constant += other.constant
-            self.terms.pop(j)
-            j -= 1
-          j += 1
-        i += 1
-
       coefficients = []
       all_negative = True
       for term in self.terms:
@@ -113,7 +114,7 @@ class ExpressionSimplifier:
           break
         coefficients.append(fabs(term.constant))
         all_negative &= term.constant < 0 
-      
+        
       if len(coefficients) > 0:
         hcf = gcd(coefficients) * (-1 if all_negative else 1)
         
@@ -124,28 +125,14 @@ class ExpressionSimplifier:
           for term in self.terms:
             term.divide(hcf)
     
-    # Merge numerical terms
-    number = 0
-    i = 0
-    while i < len(self.terms):
-      term = self.terms[i]
-      if term.is_number():
-        number += term.constant
-        self.terms.pop(i)
-        i -= 1
-      i += 1
-    
-    if number != 0:
-      self.terms.append(TermSimplifier(ASTNumber(number)))
-
     return self
   
   def to_ast(self):
     parts = list(self.terms) # clone
-
+    
     if len(parts) == 0:
       return ASTNumber(0)
-
+    
     terms = []
     if len(self.common_terms) > 0:
       terms = list(self.common_terms)
@@ -153,17 +140,20 @@ class ExpressionSimplifier:
     if len(parts) > 0:
       node = parts.pop().to_ast()
       while len(parts) > 0:
-        # TODO: subtract when negative
-        node = ASTAdd(parts.pop().to_ast(), node)
+        part = parts.pop()
+        if part.constant >= 0:
+          node = ASTAdd(node, part.to_ast())
+        else:
+          node = ASTSubtract(node, part.negate().to_ast())
       
       terms.append(node)
     
     if len(terms) == 0:
       return ASTNumber(0)
     
-    return to_multiplication_chain(terms).simplify_in_expr()
+    return to_multiplication_chain(terms)
 
-class TermSimplifier:
+class ExpressionTerm:
   def __init__(self, node):
     if not is_ast_term(node):
       self.numerator_terms = [node]
@@ -221,7 +211,7 @@ class TermSimplifier:
   
   def compute_constant(self):
     self.constant = 1
-    self.simplify()
+    self.reduce()
     
     i = 0
     while i < len(self.numerator_terms):
@@ -241,7 +231,7 @@ class TermSimplifier:
         i -= 1
       i += 1
   
-  def simplify(self):
+  def reduce(self):
     self.simplify_terms()
 
     # Cancel any shared terms in the numerator and denominator
