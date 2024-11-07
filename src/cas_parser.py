@@ -1,4 +1,6 @@
 from cas_ast import *
+from cas_settings import USE_RATIONALS
+from cas_rational import Rational
 
 def is_letter(c):
   return "a"<=c<="z" or "A"<=c<="Z"
@@ -74,6 +76,7 @@ class Tokens:
   def test_number(self):
     # TODO: More number formats including decimals
     # TODO: Somehow decide between subtract and negative number so we don't need to use −
+    # TODO: Proper rational number support
     num = ""
     negative_symbols = ["−"]
     if self.str[self.idx] in negative_symbols:
@@ -84,8 +87,12 @@ class Tokens:
       num += self.str[self.idx]
       self.idx += 1
     if len(num) > 0:
-      self.list.append(Token(TokenType.NUMBER, int(num)))
+      number = int(num)
+      if USE_RATIONALS:
+        number = Rational(number)
+      self.list.append(Token(TokenType.NUMBER, number))
       return True
+    
     return False
   def parse(self):
     self.list=[]

@@ -20,7 +20,7 @@ The code isn't structured very well, but it's mostly me messing around, so I'm n
 - [ ] Add trig identities
 - [ ] Add exponentiation support
 - [ ] Internally represent numbers as rationals to avoid floating-point errors and allow exact simplification in more cases
-- [ ] Add support for non-primary variables of differentiation so we can take partial derivatives
+- [X] Add support for non-primary variables of differentiation so we can take partial derivatives
 - [ ] Add the ability to solve equations for specific variables symbolically
 - [ ] Add the ability to solve systems of equations symbolically
 - [ ] Add support for integrals (probably not going to happen)

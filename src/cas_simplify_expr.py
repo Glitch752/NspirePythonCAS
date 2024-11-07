@@ -1,19 +1,6 @@
 from cas_ast import *
 from math import *
-
-def gcd(data):  
-  a = data[0]
-  b = 0
-  for i in range(1, len(data)):
-    b = data[i]
-    while a*b > 0:
-      if a > b:
-        a = a % b
-      else:
-        b  = b % a
-    if a == 0:
-      a = b
-  return b if a == 0 else a
+from cas_rational import gcd
 
 def to_multiplication_chain(parts):
   if len(parts) == 0:
@@ -27,16 +14,17 @@ def to_multiplication_chain(parts):
 
 # A class that simplifies a nested expression and its terms
 class ExpressionReducer:
-  def __init__(self, topmost_node):
+  def __init__(self, topmost_node, state):
     self.common_terms = []
     self.node = topmost_node
+    self.state = state.after(topmost_node)
     self.terms = []
     self.get_terms()
   
   def get_terms(self):
     node = self.node
     if not is_ast_expression(node):
-      self.terms = [ExpressionTerm(node)]
+      self.terms = [ExpressionTerm(node, self.state)]
       return
     
     # (Subtracting, node)
@@ -49,11 +37,11 @@ class ExpressionReducer:
       if is_ast_expression(n[1].left):
         nodes.append((n[0], n[1].left))
       else:
-        (subtract if n[0] else add).append(ExpressionTerm(n[1].left))
+        (subtract if n[0] else add).append(ExpressionTerm(n[1].left, self.state))
       if is_ast_expression(n[1].right):
         nodes.append((n[0] ^ (not adding), n[1].right))
       else:
-        (add if (n[0] ^ adding) else subtract).append(ExpressionTerm(n[1].right))
+        (add if (n[0] ^ adding) else subtract).append(ExpressionTerm(n[1].right, self.state))
     
     self.terms = add
     for term in subtract:
@@ -133,14 +121,17 @@ class ExpressionReducer:
     if len(parts) == 0:
       return ASTNumber(0)
     
+    if self.state.sort_terms:
+      parts.sort(key=lambda x: x.__str__())
+    
     terms = []
     if len(self.common_terms) > 0:
       terms = list(self.common_terms)
     
     if len(parts) > 0:
-      node = parts.pop().to_ast()
+      node = parts.pop(0).to_ast()
       while len(parts) > 0:
-        part = parts.pop()
+        part = parts.pop(0)
         if part.constant >= 0:
           node = ASTAdd(node, part.to_ast())
         else:
@@ -151,10 +142,15 @@ class ExpressionReducer:
     if len(terms) == 0:
       return ASTNumber(0)
     
+    if self.state.sort_terms:
+      terms.sort(key=lambda x: x.__str__())
+    
     return to_multiplication_chain(terms)
 
 class ExpressionTerm:
-  def __init__(self, node):
+  def __init__(self, node, state):
+    self.state = state.after(node)
+
     if not is_ast_term(node):
       self.numerator_terms = [node]
       self.denominator_terms = []
@@ -191,6 +187,11 @@ class ExpressionTerm:
     
     self.compute_constant()
   
+  def __str__(self):
+    return "Term(" + str(self.numerator_terms) + ", " + str(self.denominator_terms) + ", " + str(self.constant) + ")"
+  def __repr__(self):
+    return self.__str__()
+  
   def negate(self):
     self.constant *= -1
     return self
@@ -201,16 +202,16 @@ class ExpressionTerm:
   def is_number(self):
     return len(self.numerator_terms) == 0 and len(self.denominator_terms) == 0
   
-  def simplify_terms(self):
+  def reduce_terms(self):
     for i in range(len(self.numerator_terms)):
       self.numerator_terms[i] = \
-        self.numerator_terms[i].simplify()
+        self.numerator_terms[i].reduce(self.state)
     for i in range(len(self.denominator_terms)):
       self.denominator_terms[i] = \
-        self.denominator_terms[i].simplify()
+        self.denominator_terms[i].reduce(self.state)
   
   def compute_constant(self):
-    self.constant = 1
+    self.constant = Rational(1) if USE_RATIONALS else 1
     self.reduce()
     
     i = 0
@@ -232,7 +233,7 @@ class ExpressionTerm:
       i += 1
   
   def reduce(self):
-    self.simplify_terms()
+    self.reduce_terms()
 
     # Cancel any shared terms in the numerator and denominator
     i = 0
@@ -246,7 +247,7 @@ class ExpressionTerm:
 
     return self
   
-  def to_ast(self):    
+  def to_ast(self):
     numerator = list(self.numerator_terms)
     denominator = list(self.denominator_terms)
     if (len(numerator) == 0 and len(denominator) == 0) or self.constant == 0:
@@ -254,6 +255,9 @@ class ExpressionTerm:
     numerator_ast = None
 
     if len(numerator) > 0:
+      if self.state.sort_terms:
+        numerator.sort(key=lambda x: x.__str__())
+      
       chain = to_multiplication_chain(numerator)
       numerator_ast = \
         ASTMultiply(ASTNumber(self.constant), chain) \
@@ -263,6 +267,10 @@ class ExpressionTerm:
     
     if len(denominator) == 0:
       return numerator_ast
+    
+    if self.state.sort_terms:
+      denominator.sort(key=lambda x: x.__str__())
+    
     return ASTDivide( # TODO: proper rationals?
       numerator_ast,
       to_multiplication_chain(denominator)

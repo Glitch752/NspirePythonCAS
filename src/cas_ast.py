@@ -1,3 +1,5 @@
+from cas_settings import USE_RATIONALS
+from cas_rational import Rational
 from math import sin, cos
 
 def is_ast_constant(node):
@@ -18,14 +20,15 @@ def is_ast_term(node):
   return isinstance(node, (ASTMultiply, ASTDivide))
 
 class SimplifyState:
-  def __init__(self, node=None):
+  def __init__(self, node=None, sort_terms=False):
     self.parent = node
+    self.sort_terms = sort_terms
   def parent_is_expression(self):
     return is_ast_expression(self.parent)
   def parent_is_term(self):
     return is_ast_term(self.parent)
   def after(self, node):
-    return SimplifyState(node)
+    return SimplifyState(node, self.sort_terms)
   def reduce(self, node):
     return node.reduce(self)
   def expand(self, node):
@@ -52,13 +55,15 @@ class ASTNode:
     raise Exception("Implement me!")
   def __str__(self):
     raise Exception("Implement me!")
+  def __repr__(self):
+    return self.__str__()
   
   def negate(self):
     return ASTMultiply(ASTNumber(-1), self)
 
   # Don't override this; override reduce and expand instead
-  def simplify(self):
-    return self.expand(SimplifyState()).reduce(SimplifyState())
+  def simplify(self, sort_terms=False):
+    return self.expand(SimplifyState()).reduce(SimplifyState(sort_terms=sort_terms))
   def reduce(self, state):
     return self
   def expand(self, state):
@@ -75,9 +80,14 @@ class ASTNode:
 
 class ASTNumber(ASTNode):
   def __init__(self, number):
-    self.number = number
+    if USE_RATIONALS and isinstance(number, int):
+      self.number = Rational(number)
+    else:
+      self.number = number
   
   def pretty_str(self, precidence):
+    # if isinstance(self.number, Rational):
+    #   return str(self.number)
     return str(int(self.number)) if int(self.number) == self.number else str(self.number)
   def __str__(self):
     return str(self.number)
@@ -85,6 +95,8 @@ class ASTNumber(ASTNode):
   def negate(self):
     return ASTNumber(self.number * -1)
   def eval(self):
+    if USE_RATIONALS:
+      return float(self.number)
     return self.number
   def derivative(self, var):
     return ASTNumber(0)
@@ -179,7 +191,7 @@ class ASTFunctionCall(ASTNode):
     return ASTMultiply(
       self.derivative_f(),
       self.argument.derivative(var)
-    )
+    ).simplify()
 
 class ASTAdd(ASTNode):
   precidence = 4
@@ -195,8 +207,8 @@ class ASTAdd(ASTNode):
   def __str__(self):
     return "(" + str(self.left) + "+" + str(self.right) + ")"
 
-  def reduce(self, state):
-    state = state.after(self)
+  def reduce(self, original_state):
+    state = original_state.after(self)
 
     left = self.left.reduce(state)
     right = self.right.reduce(state)
@@ -207,15 +219,15 @@ class ASTAdd(ASTNode):
     if is_ast_constant(left) and is_ast_constant(right):
       return ASTNumber(left.number + right.number)
     simplified_self = ASTAdd(left, right)
-    if state.parent_is_expression():
+    if original_state.parent_is_expression():
       return simplified_self
     
     from cas_simplify_expr import ExpressionReducer
-    return ExpressionReducer(simplified_self).reduce().to_ast().reduce(state)
+    return ExpressionReducer(simplified_self, original_state).reduce().to_ast().reduce(state)
   def expand(self, state):
     # TODO
     return ASTAdd(self.left.expand(state), self.right.expand(state))
-  
+
   def substitute(self, var, value):
     return ASTAdd(
       self.left.substitute(var, value),
@@ -246,8 +258,8 @@ class ASTSubtract(ASTNode):
   def negate(self):
     return ASTSubtract(self.right, self.left)
   
-  def reduce(self, state):
-    state = state.after(self)
+  def reduce(self, original_state):
+    state = original_state.after(self)
 
     left = self.left.reduce(state)
     right = self.right.reduce(state)
@@ -264,15 +276,15 @@ class ASTSubtract(ASTNode):
       )
     simplified_self = ASTSubtract(left, right)
   
-    if state.parent_is_expression():
+    if original_state.parent_is_expression():
       return simplified_self
     
     from cas_simplify_expr import ExpressionReducer
-    return ExpressionReducer(simplified_self).reduce().to_ast().reduce(state)
+    return ExpressionReducer(simplified_self, original_state).reduce().to_ast().reduce(state)
   def expand(self, state):
     # TODO
     return ASTSubtract(self.left.expand(state), self.right.expand(state))
-  
+
   def substitute(self, var, value):
     return ASTSubtract(
       self.left.substitute(var, value),
@@ -314,8 +326,8 @@ class ASTMultiply(ASTNode):
       return ASTMultiply(self.left.negate(), self.right)
     return ASTMultiply(ASTNumber(-1), self)
   
-  def reduce(self, state):
-    state = state.after(self)
+  def reduce(self, original_state):
+    state = original_state.after(self)
 
     left = self.left.reduce(state)
     right = self.right.reduce(state)
@@ -329,11 +341,11 @@ class ASTMultiply(ASTNode):
       return ASTNumber(left.number * right.number)
     simplified_self = ASTMultiply(left, right)
 
-    if state.parent_is_term():
+    if original_state.parent_is_term():
       return simplified_self
   
     from cas_simplify_expr import ExpressionTerm
-    return ExpressionTerm(simplified_self).reduce().to_ast().reduce(state)
+    return ExpressionTerm(simplified_self, original_state).reduce().to_ast().reduce(state)
   def expand(self, state):
     # TODO
     return ASTMultiply(self.left.expand(state), self.right.expand(state))
@@ -370,8 +382,8 @@ class ASTDivide(ASTNode):
       return ASTDivide(self.numerator.negate(), self.denominator)
     return ASTMultiply(ASTNumber(-1), self)
   
-  def reduce(self, state):
-    state = state.after(self)
+  def reduce(self, original_state):
+    state = original_state.after(self)
     
     numerator = self.numerator.reduce(state)
     denominator = self.denominator.reduce(state)
@@ -383,11 +395,11 @@ class ASTDivide(ASTNode):
       return ASTNumber(numerator.number / denominator.number)
     simplified_self = ASTDivide(numerator, denominator)
 
-    if state.parent_is_term():
+    if original_state.parent_is_term():
       return simplified_self
   
     from cas_simplify_expr import ExpressionTerm
-    return ExpressionTerm(simplified_self).reduce().to_ast().reduce(state)
+    return ExpressionTerm(simplified_self, original_state).reduce().to_ast().reduce(state)
   def expand(self, state):
     # TODO
     return ASTDivide(self.numerator.expand(state), self.denominator.expand(state))

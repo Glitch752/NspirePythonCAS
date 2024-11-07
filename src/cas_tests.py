@@ -2,21 +2,10 @@ from cas_parser import parse_to_ast
 from cas_ast import *
 from math import *
 
-# TODO: Proper equality checking
-# Since we use set which is unordered, we can't
-# directly compare values. This means we need to
-# test values instead of comparing them robustly.
+# Some tests use test values, some use equality checking after loosely sorting the AST representation.
+# There may be a more robust way to do this, but this is good enough for now.
 
-test_values = [
-  ASTNumber(1),
-  ASTNumber(0),
-  ASTNumber(-1),
-  ASTNumber(50),
-  ASTNumber(36.2),
-  ASTNumber(14.3),
-  ASTNumber(8.9),
-  # There's probably a better way to do this lol
-]
+test_values = [ ASTNumber(1), ASTNumber(0), ASTNumber(-1), ASTNumber(50), ASTNumber(36.2), ASTNumber(14.3), ASTNumber(8.9) ]
 
 def expect(expr, expected, message, test_vars=["x"], no_zero_input=False):
   for value in test_values:
@@ -72,8 +61,11 @@ def test_simplify(full, simplified, message, test_vars=["x"], no_zero_input=Fals
 def test_derivative(expr, var, expected, message):
   expect(parse_to_ast(expr).derivative(var), parse_to_ast(expected), message, [var])
 
-def test_pretty_str(expr, expected, message):
-  a = parse_to_ast(expr).pretty_str(100)
+def test_pretty_str(expr, expected, message, simplify=False, sort=False):
+  a = parse_to_ast(expr)
+  if simplify or sort:
+    a = a.simplify(sort)
+  a = a.pretty_str(100)
   b = expected
   if a != b:
     print("Expected: " + b)
@@ -82,6 +74,8 @@ def test_pretty_str(expr, expected, message):
     raise Exception("Test " + message + " failed")
   print("Test " + message + " passed!")
 
+import cas_settings
+cas_settings.USE_RATIONALS = False
 
 test_eval("1+1", "2", "Eval 1")
 test_eval("2*3", "6", "Eval 2")
@@ -106,5 +100,9 @@ test_pretty_str("15*(x+1)", "15(x+1)", "Pretty string 2")
 test_pretty_str("(2*y)/(3*x*z)", "2y/(3xz)", "Pretty string 3")
 test_pretty_str("3*sin(2*x)", "3sin(2x)", "Pretty string 4")
 test_pretty_str("−1*x*x", "-xx", "Pretty string 5")
+
+test_pretty_str("5*x*x + 10*x", "5(x+2)x", "Pretty string 6", simplify=True, sort=True)
+test_pretty_str("3*x*y + 2*x*y", "5xy", "Pretty string 7", simplify=True, sort=True)
+test_pretty_str("3 - 4 + x*x - 2*x + 4*x*x + 3*x", "5xx+x-1", "Pretty string 8", simplify=True, sort=True)
 
 print("All tests passed!")

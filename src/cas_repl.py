@@ -8,7 +8,7 @@ while True:
   print(ast.pretty_str(100))
   
   print("\nParsed simplified:")
-  simplified_ast = ast.reduce()
+  simplified_ast = ast.simplify()
   print(simplified_ast.pretty_str(100))
   
   print("\nDerivative for x:")
