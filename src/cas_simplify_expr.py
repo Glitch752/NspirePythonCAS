@@ -1,6 +1,7 @@
 from cas_ast import *
 from math import *
 from cas_rational import gcd
+import cas_settings
 
 def to_multiplication_chain(parts):
   if len(parts) == 0:
@@ -211,7 +212,7 @@ class ExpressionTerm:
         self.denominator_terms[i].reduce(self.state)
   
   def compute_constant(self):
-    self.constant = Rational(1) if USE_RATIONALS else 1
+    self.constant = Rational(1) if cas_settings.USE_RATIONALS else 1
     self.reduce()
     
     i = 0

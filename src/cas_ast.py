@@ -1,4 +1,4 @@
-from cas_settings import USE_RATIONALS
+import cas_settings
 from cas_rational import Rational
 from math import sin, cos
 
@@ -80,7 +80,7 @@ class ASTNode:
 
 class ASTNumber(ASTNode):
   def __init__(self, number):
-    if USE_RATIONALS and isinstance(number, int):
+    if cas_settings.USE_RATIONALS and isinstance(number, int):
       self.number = Rational(number)
     else:
       self.number = number
@@ -95,7 +95,7 @@ class ASTNumber(ASTNode):
   def negate(self):
     return ASTNumber(self.number * -1)
   def eval(self):
-    if USE_RATIONALS:
+    if cas_settings.USE_RATIONALS:
       return float(self.number)
     return self.number
   def derivative(self, var):

@@ -3,4 +3,4 @@
 # exact results.
 
 # This is pretty broken right now.
-USE_RATIONALS = False
+USE_RATIONALS = True

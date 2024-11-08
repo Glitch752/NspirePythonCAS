@@ -1,5 +1,5 @@
 from cas_ast import *
-from cas_settings import USE_RATIONALS
+import cas_settings
 from cas_rational import Rational
 
 def is_letter(c):
@@ -88,7 +88,7 @@ class Tokens:
       self.idx += 1
     if len(num) > 0:
       number = int(num)
-      if USE_RATIONALS:
+      if cas_settings.USE_RATIONALS:
         number = Rational(number)
       self.list.append(Token(TokenType.NUMBER, number))
       return True

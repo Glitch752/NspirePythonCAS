@@ -1,15 +1,12 @@
+from math import fabs
+
 def gcd(data):  
   a = data[0]
   b = 0
   for i in range(1, len(data)):
     b = data[i]
-    while a*b > 0:
-      if a > b:
-        a = a % b
-      else:
-        b  = b % a
-    if a == 0:
-      a = b
+    while a != 0:
+      a, b = b % a, a
   return b if a == 0 else a
 
 class Rational:
@@ -37,7 +34,10 @@ class Rational:
         if self.denominator < 0:
             self.numerator *= -1
             self.denominator *= -1
-        g = gcd([self.numerator, self.denominator])
+        g = gcd([fabs(self.numerator), fabs(self.denominator)])
+        if g == 0:
+            # Probably shouldn't happen, but just in case
+            return
         self.numerator //= g
         self.denominator //= g
     
@@ -45,31 +45,43 @@ class Rational:
         if isinstance(other, Rational):
             return Rational(self.numerator * other.denominator + other.numerator * self.denominator, self.denominator * other.denominator)
         return Rational(self.numerator + other * self.denominator, self.denominator)
+    def __radd__(self, other):
+        return self + other
     
     def __sub__(self, other):
         if isinstance(other, Rational):
             return Rational(self.numerator * other.denominator - other.numerator * self.denominator, self.denominator * other.denominator)
         return Rational(self.numerator - other * self.denominator, self.denominator)
+    def __rsub__(self, other):
+        return -self + other
 
     def __mul__(self, other):
         if isinstance(other, Rational):
             return Rational(self.numerator * other.numerator, self.denominator * other.denominator)
         return Rational(self.numerator * other, self.denominator)
+    def __rmul__(self, other):
+        return self * other
     
     def __truediv__(self, other):
         if isinstance(other, Rational):
             return Rational(self.numerator * other.denominator, self.denominator * other.numerator)
         return Rational(self.numerator, self.denominator * other)
+    def __rtruediv__(self, other):
+        return Rational(other) / self
     
     def __floordiv__(self, other):
         if isinstance(other, Rational):
             return self / other
         return Rational(self.numerator // other, self.denominator)
+    def __rfloordiv__(self, other):
+        return Rational(other) // self
 
     def __mod__(self, other):
         if not isinstance(other, Rational):
             other = Rational(other)
         return self - other * (self // other)
+    def __rmod__(self, other):
+        return Rational(other) % self
 
     def __lt__(self, other):
         if not isinstance(other, Rational):
