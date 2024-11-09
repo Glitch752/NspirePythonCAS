@@ -11,6 +11,9 @@ def gcd(data):
 
 class Rational:
     def __init__(self, numerator, denominator=1):
+        if isinstance(numerator, float) or isinstance(denominator, float):
+            raise Exception("Rational numbers cannot be created from floats")
+        
         if isinstance(numerator, Rational):
             self.numerator = numerator.numerator
             self.denominator = numerator.denominator
