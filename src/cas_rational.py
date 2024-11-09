@@ -11,9 +11,6 @@ def gcd(data):
 
 class Rational:
     def __init__(self, numerator, denominator=1):
-        if isinstance(numerator, float) or isinstance(denominator, float):
-            raise Exception("Rational numbers cannot be created from floats")
-        
         if isinstance(numerator, Rational):
             self.numerator = numerator.numerator
             self.denominator = numerator.denominator
@@ -21,14 +18,20 @@ class Rational:
                 self.numerator *= denominator.denominator
                 self.denominator *= denominator.numerator
             else:
+                if int(denominator) != denominator:
+                    raise Exception("Rational numbers cannot be created from floats")
                 self.denominator *= denominator
         else:
+            if int(numerator) != numerator:
+                raise Exception("Rational numbers cannot be created from floats")
             self.numerator = int(numerator)
             self.denominator = 1
             if isinstance(denominator, Rational):
                 self.denominator = denominator.numerator
                 self.numerator *= denominator.denominator
             else:
+                if int(denominator) != denominator:
+                    raise Exception("Rational numbers cannot be created from floats")
                 self.denominator = int(denominator)
         
         self.reduce()
@@ -73,9 +76,7 @@ class Rational:
         return Rational(other) / self
     
     def __floordiv__(self, other):
-        if isinstance(other, Rational):
-            return self / other
-        return Rational(self.numerator // other, self.denominator)
+        return (self / other).__int__()
     def __rfloordiv__(self, other):
         return Rational(other) // self
 
@@ -113,8 +114,8 @@ class Rational:
     
     def __str__(self):
         if self.denominator == 1:
-            return str(self.numerator)
-        return str(self.numerator) + "/" + str(self.denominator)
+            return str(int(self.numerator))
+        return str(int(self.numerator)) + "/" + str(int(self.denominator))
     
     def __repr__(self):
         return str(self)

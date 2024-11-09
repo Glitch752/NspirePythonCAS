@@ -131,11 +131,12 @@ class ASTLebiniz(ASTNode):
   def pretty_str(self, precidence):
     string = "d"
     if self.degree != 1:
-      string += "^" + self.degree + " "
+      string += "^" + str(self.degree) + " "
     string += self.main
-    string += " / d" + self.relative_to
+    string += "/" if self.degree == 1 else " / "
+    string += "d" + self.relative_to
     if self.degree != 1:
-      string += "^" + self.degree
+      string += "^" + str(self.degree)
     if precidence < ASTLebiniz.precidence:
       string = "(" + string + ")"
     return string
@@ -311,7 +312,7 @@ class ASTMultiply(ASTNode):
       (left, right) = (right, left)
     if is_ast_negative_one(left):
       return "-" + right.pretty_str(ASTMultiply.precidence)
-    add_multiply = is_ast_constant(self.right) or is_ast_term_left_constant(self.right)
+    add_multiply = is_ast_constant(right) or is_ast_term_left_constant(right)
     string = left.pretty_str(ASTMultiply.precidence) + \
       ("*" if add_multiply else "") + \
       right.pretty_str(ASTMultiply.precidence)
