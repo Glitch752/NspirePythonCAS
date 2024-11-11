@@ -1,13 +1,21 @@
 from math import fabs
 
-def gcd(data):  
+def gcd(data):
   a = data[0]
   b = 0
   for i in range(1, len(data)):
     b = data[i]
-    while a != 0:
-      a, b = b % a, a
-  return b if a == 0 else a
+    while b != 0:
+      a, b = b, a % b
+    
+    if a == 1:
+      return 1
+  return a
+
+def fast_2_gcd(a, b):
+  while b != 0:
+    a, b = b, a % b
+  return a
 
 class Rational:
     def __init__(self, numerator, denominator=1):
@@ -40,7 +48,7 @@ class Rational:
         if self.denominator < 0:
             self.numerator *= -1
             self.denominator *= -1
-        g = gcd([fabs(self.numerator), fabs(self.denominator)])
+        g = fast_2_gcd(int(fabs(self.numerator)), int(fabs(self.denominator)))
         if g == 0:
             # Probably shouldn't happen, but just in case
             return

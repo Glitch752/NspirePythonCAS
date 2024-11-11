@@ -70,8 +70,22 @@ class ASTNode:
     # TODO: Implement in subclasses
     return self
   
+  def traverse(self, func):
+    # Subclasses should call traverse on all children
+    func(self)
+  def get_variables(self):
+    variables = set()
+    self.traverse(lambda node: variables.add(node.name) if isinstance(node, ASTVariable) else None)
+    return variables
+  
   def substitute(self, var, value):
     return self
+  def substitute_with_numbers(self, values):
+    node = self
+    for var, value in values.items():
+      node = node.substitute(var, ASTNumber(value))
+    return node
+
   def eval(self):
     raise Exception("Implement me!")
   
@@ -86,8 +100,10 @@ class ASTNumber(ASTNode):
       self.number = number
   
   def pretty_str(self, precidence):
-    # if isinstance(self.number, Rational):
-    #   return str(self.number)
+    if isinstance(self.number, Rational):
+      return "(" + str(self.number) + ")"\
+        if (precidence <= 3 and self.number.denominator != 1)\
+        else str(self.number)
     return str(int(self.number)) if int(self.number) == self.number else str(self.number)
   def __str__(self):
     return str(self.number)
@@ -172,6 +188,10 @@ class ASTFunctionCall(ASTNode):
   def expand(self, state):
     return ASTFunctionCall(self.name, self.argument.expand(state.after(self)))
 
+  def traverse(self, func):
+    self.argument.traverse(func)
+    func(self)
+
   def substitute(self, var, value):
     return ASTFunctionCall(self.name, self.argument.substitute(var, value))
   def eval(self):
@@ -228,6 +248,11 @@ class ASTAdd(ASTNode):
   def expand(self, state):
     # TODO
     return ASTAdd(self.left.expand(state), self.right.expand(state))
+  
+  def traverse(self, func):
+    self.left.traverse(func)
+    self.right.traverse(func)
+    func(self)
 
   def substitute(self, var, value):
     return ASTAdd(
@@ -285,6 +310,11 @@ class ASTSubtract(ASTNode):
   def expand(self, state):
     # TODO
     return ASTSubtract(self.left.expand(state), self.right.expand(state))
+  
+  def traverse(self, func):
+    self.left.traverse(func)
+    self.right.traverse(func)
+    func(self)
 
   def substitute(self, var, value):
     return ASTSubtract(
@@ -351,6 +381,11 @@ class ASTMultiply(ASTNode):
     # TODO
     return ASTMultiply(self.left.expand(state), self.right.expand(state))
   
+  def traverse(self, func):
+    self.left.traverse(func)
+    self.right.traverse(func)
+    func(self)
+  
   def substitute(self, var, value):
     return ASTMultiply(
       self.left.substitute(var, value),
@@ -404,6 +439,11 @@ class ASTDivide(ASTNode):
   def expand(self, state):
     # TODO
     return ASTDivide(self.numerator.expand(state), self.denominator.expand(state))
+  
+  def traverse(self, func):
+    self.numerator.traverse(func)
+    self.denominator.traverse(func)
+    func(self)
   
   def substitute(self, var, value):
     return ASTDivide(

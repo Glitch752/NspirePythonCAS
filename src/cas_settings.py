@@ -2,5 +2,4 @@
 # instead of floating point. This is slower, but guarentees
 # exact results.
 
-# This is pretty broken right now.
 USE_RATIONALS = True

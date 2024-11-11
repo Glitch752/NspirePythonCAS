@@ -106,7 +106,7 @@ class ExpressionReducer:
         
       if len(coefficients) > 0:
         hcf = gcd(coefficients) * (-1 if all_negative else 1)
-        
+
         if hcf != 1:
           self.common_terms.append(
             ASTNumber(hcf)

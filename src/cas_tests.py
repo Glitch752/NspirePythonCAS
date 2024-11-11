@@ -3,7 +3,7 @@ from cas_ast import *
 from math import *
 
 import cas_settings
-cas_settings.USE_RATIONALS = False
+cas_settings.USE_RATIONALS = True
 
 QUIET = False
 
@@ -108,7 +108,7 @@ def test_result_str(expr, expected, name, simplify=False, sort=False):
 
 def rational_tests():
   test_category("Rational tests")
-  from cas_rational import Rational
+  from cas_rational import Rational, gcd, fast_2_gcd
   test_assert_equal(Rational(Rational(1, 2), Rational(1, 3)), Rational(3, 2), "Rational construction")
   test_assert_equal(Rational(1000, 4000).numerator + Rational(1000, 4000).denominator, 5, "Rational simplification")
   test_assert_equal(Rational(-5, -3).numerator, 5, "Rational negative simplification")
@@ -132,6 +132,14 @@ def rational_tests():
   test_assert_equal(Rational(8, 4) == 2, True, "Rational integer equality")
   test_assert_equal(str(Rational(5, 7)), "5/7", "Rational string")
   test_assert_equal(str(Rational(5)), "5", "Rational string integer")
+
+  test_assert_equal(gcd([5, 10, 15]), 5, "GCD multiple numbers")
+  test_assert_equal(gcd([0, 3, 5]), 1, "GCD zero in list")
+  test_assert_equal(gcd([Rational(3), Rational(6), Rational(9)]), 3, "GCD rationals")
+  test_assert_equal(gcd([Rational(1), Rational(1), Rational(3)]), 1, "GCD rationals no common factor")
+  test_assert_equal(fast_2_gcd(5, 10), 5, "Fast GCD")
+  test_assert_equal(fast_2_gcd(0, 3), 3, "Fast GCD zero")
+  test_assert_equal(fast_2_gcd(Rational(3), Rational(6)), 3, "Fast GCD rationals")
   test_end_category()
 rational_tests()
 
@@ -177,6 +185,14 @@ def readable_string_tests():
   test_result_str("−1*x*x", "-xx", "Negative sign placement")
   test_result_str(ASTLebiniz("v", "t", 1), "dv/dt", "Leibniz notation")
   test_result_str(ASTLebiniz("v", "t", 2), "d^2 v / dt^2", "Leibniz notation squared")
+  test_result_str(
+    ASTAdd(ASTNumber(Rational(5, 3)), ASTVariable("x")),
+    "5/3+x", "Rational printing precedence no parens"
+  )
+  test_result_str(
+    ASTMultiply(ASTNumber(Rational(5, 3)), ASTVariable("x")),
+    "(5/3)x", "Rational printing precedence parens"
+  )
   test_end_category()
 readable_string_tests()
 
@@ -186,6 +202,7 @@ def exact_simplification_tests():
   test_result_str("3*x*y + 2*x*y", "5xy", "Combine like terns", simplify=True, sort=True)
   test_result_str("3 - 4 + x*x - 2*x + 4*x*x + 3*x", "5xx+x-1", "Simplify larger polynomial", simplify=True, sort=True)
   test_result_str("sin(6/(2*x))", "sin(3/x)", "Simplify function arguments", simplify=True, sort=True)
+  test_result_str("3*x*x - 3*x - 9", "3(xx-3-x)", "GCD doesn't break on edge cases", simplify=True)
   test_end_category()
 exact_simplification_tests()
 
