@@ -24,7 +24,7 @@ class ExpressionReducer:
   
   def get_terms(self):
     node = self.node
-    if not is_ast_expression(node):
+    if not node.is_expression():
       self.terms = [ExpressionTerm(node, self.state)]
       return
     
@@ -35,11 +35,11 @@ class ExpressionReducer:
     while len(nodes) > 0:
       n = nodes.pop()
       adding = isinstance(n[1], ASTAdd)
-      if is_ast_expression(n[1].left):
+      if n[1].left.is_expression():
         nodes.append((n[0], n[1].left))
       else:
         (subtract if n[0] else add).append(ExpressionTerm(n[1].left, self.state))
-      if is_ast_expression(n[1].right):
+      if n[1].right.is_expression():
         nodes.append((n[0] ^ (not adding), n[1].right))
       else:
         (add if (n[0] ^ adding) else subtract).append(ExpressionTerm(n[1].right, self.state))
@@ -152,7 +152,7 @@ class ExpressionTerm:
   def __init__(self, node, state):
     self.state = state.after(node)
 
-    if not is_ast_term(node):
+    if not node.is_term():
       self.numerator_terms = [node]
       self.denominator_terms = []
       self.compute_constant()
@@ -165,20 +165,20 @@ class ExpressionTerm:
     while len(nodes) > 0:
       n = nodes.pop()
       if isinstance(n[1], ASTMultiply):
-        if is_ast_term(n[1].left):
+        if n[1].left.is_term():
           nodes.append((n[0], n[1].left))
         else:
           (denominator if n[0] else numerator).append(n[1].left)
-        if is_ast_term(n[1].right):
+        if n[1].right.is_term():
           nodes.append((n[0], n[1].right))
         else:
           (denominator if n[0] else numerator).append(n[1].right)
       else:
-        if is_ast_term(n[1].numerator):
+        if n[1].numerator.is_term():
           nodes.append((n[0], n[1].numerator))
         else:
           (denominator if n[0] else numerator).append(n[1].numerator)
-        if is_ast_term(n[1].denominator):
+        if n[1].denominator.is_term():
           nodes.append((not n[0], n[1].denominator))
         else:
           (numerator if n[0] else denominator).append(n[1].denominator)

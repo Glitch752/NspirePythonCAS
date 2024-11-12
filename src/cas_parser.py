@@ -83,7 +83,7 @@ class Tokens:
       num = "-"
       self.idx += 1
     while self.idx < len(self.str) and \
-        is_number(self.str[self.idx]):
+       is_number(self.str[self.idx]):
       num += self.str[self.idx]
       self.idx += 1
     if len(num) > 0:

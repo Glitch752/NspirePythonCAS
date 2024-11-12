@@ -2,31 +2,23 @@ import cas_settings
 from cas_rational import Rational
 from math import sin, cos
 
-def is_ast_constant(node):
-  return isinstance(node, ASTNumber)
-def is_ast_zero(node):
-  return is_ast_constant(node)  and  node.number == 0
-def is_ast_one(node):
-  return is_ast_constant(node)  and  node.number == 1
-def is_ast_negative_one(node):
-  return is_ast_constant(node)  and  node.number == -1
-def is_ast_term_left_constant(node):
-  return \
-    (isinstance(node, ASTMultiply) and is_ast_constant(node.left)) or \
-    (isinstance(node, ASTDivide) and is_ast_constant(node.numerator))
-def is_ast_expression(node):
-  return isinstance(node, (ASTAdd, ASTSubtract))
-def is_ast_term(node):
-  return isinstance(node, (ASTMultiply, ASTDivide))
+# Micropython's float implementation unfortunately
+# doesn't fall back to the __float__ magic method.
+# This is a workaround for that.
+def to_float(obj):
+  try:
+    return float(obj)
+  except:
+    return obj.__float__()
 
 class SimplifyState:
   def __init__(self, node=None, sort_terms=False):
     self.parent = node
     self.sort_terms = sort_terms
   def parent_is_expression(self):
-    return is_ast_expression(self.parent)
+    return self.parent != None and self.parent.is_expression()
   def parent_is_term(self):
-    return is_ast_term(self.parent)
+    return self.parent != None and self.parent.is_term()
   def after(self, node):
     return SimplifyState(node, self.sort_terms)
   def reduce(self, node):
@@ -92,6 +84,18 @@ class ASTNode:
   def derivative(self, var):
     raise Exception("Implement me!")
 
+  # Helper functions
+  def is_number(self):
+    return isinstance(self, ASTNumber)
+  def is_integer(self):
+    return isinstance(self, ASTNumber) and int(self.number) == self.number
+  def is_exactly(self, num):
+    return isinstance(self, ASTNumber) and self.number == num
+  def is_expression(self):
+    return isinstance(self, (ASTAdd, ASTSubtract))
+  def is_term(self):
+    return isinstance(self, (ASTMultiply, ASTDivide))
+
 class ASTNumber(ASTNode):
   def __init__(self, number):
     if cas_settings.USE_RATIONALS and isinstance(number, int):
@@ -112,7 +116,7 @@ class ASTNumber(ASTNode):
     return ASTNumber(self.number * -1)
   def eval(self):
     if cas_settings.USE_RATIONALS:
-      return float(self.number)
+      return to_float(self.number)
     return self.number
   def derivative(self, var):
     return ASTNumber(0)
@@ -233,11 +237,11 @@ class ASTAdd(ASTNode):
 
     left = self.left.reduce(state)
     right = self.right.reduce(state)
-    if is_ast_zero(left):
+    if left.is_exactly(0):
       return right
-    if is_ast_zero(right):
+    if right.is_exactly(0):
       return left
-    if is_ast_constant(left) and is_ast_constant(right):
+    if left.is_number() and right.is_number():
       return ASTNumber(left.number + right.number)
     simplified_self = ASTAdd(left, right)
     if original_state.parent_is_expression():
@@ -289,13 +293,13 @@ class ASTSubtract(ASTNode):
 
     left = self.left.reduce(state)
     right = self.right.reduce(state)
-    if is_ast_constant(left) and is_ast_constant(right):
+    if left.is_number() and right.is_number():
       return ASTNumber(left.number - right.number)
-    if is_ast_zero(left):
+    if left.is_exactly(0):
       return ASTMultiply(ASTNumber(-1), right)
-    if is_ast_zero(right):
+    if right.is_exactly(0):
       return left
-    if is_ast_constant(left) and left.number < 1:
+    if left.is_number() and left.number < 1:
       return ASTSubtract(
         right.negate(),
         left.negate()
@@ -338,11 +342,15 @@ class ASTMultiply(ASTNode):
   def pretty_str(self, precidence):
     left = self.left
     right = self.right
-    if is_ast_constant(right) and not is_ast_constant(left):
+    if right.is_number() and not left.is_number():
       (left, right) = (right, left)
-    if is_ast_negative_one(left):
+    if left.is_exactly(-1):
       return "-" + right.pretty_str(ASTMultiply.precidence)
-    add_multiply = is_ast_constant(right) or is_ast_term_left_constant(right)
+
+    add_multiply = right.is_number() or (
+        (isinstance(right, ASTMultiply) and right.left.is_number()) or \
+        (isinstance(right, ASTDivide) and right.numerator.is_number())
+      )
     string = left.pretty_str(ASTMultiply.precidence) + \
       ("*" if add_multiply else "") + \
       right.pretty_str(ASTMultiply.precidence)
@@ -353,7 +361,7 @@ class ASTMultiply(ASTNode):
     return "(" + str(self.left) + "*" + str(self.right) + ")"
   
   def negate(self):
-    if is_ast_constant(self.left):
+    if self.left.is_number():
       return ASTMultiply(self.left.negate(), self.right)
     return ASTMultiply(ASTNumber(-1), self)
   
@@ -362,13 +370,13 @@ class ASTMultiply(ASTNode):
 
     left = self.left.reduce(state)
     right = self.right.reduce(state)
-    if is_ast_zero(left) or is_ast_zero(right):
+    if left.is_exactly(0) or right.is_exactly(0):
       return ASTNumber(0)
-    if is_ast_one(right):
+    if right.is_exactly(1):
       return left
-    if is_ast_one(left):
+    if left.is_exactly(1):
       return right
-    if is_ast_constant(left) and is_ast_constant(right):
+    if left.is_number() and right.is_number():
       return ASTNumber(left.number * right.number)
     simplified_self = ASTMultiply(left, right)
 
@@ -414,7 +422,7 @@ class ASTDivide(ASTNode):
     return "(" + str(self.numerator) + "/" + str(self.denominator) + ")"
   
   def negate(self):
-    if is_ast_constant(self.numerator):
+    if self.numerator.is_number():
       return ASTDivide(self.numerator.negate(), self.denominator)
     return ASTMultiply(ASTNumber(-1), self)
   
@@ -423,11 +431,11 @@ class ASTDivide(ASTNode):
     
     numerator = self.numerator.reduce(state)
     denominator = self.denominator.reduce(state)
-    if is_ast_zero(numerator):
+    if numerator.is_exactly(0):
       return ASTNumber(0)
-    if is_ast_one(denominator):
+    if denominator.is_exactly(1):
       return numerator
-    if is_ast_constant(numerator) and is_ast_constant(denominator):
+    if numerator.is_number() and denominator.is_number():
       return ASTNumber(numerator.number / denominator.number)
     simplified_self = ASTDivide(numerator, denominator)
 

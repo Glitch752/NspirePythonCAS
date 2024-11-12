@@ -27,13 +27,15 @@ while True:
     variables = simplified_ast.get_variables()
     values = {}
     for var in variables:
-      values[var] = float(input(f"Value of {var}: "))
+      values[var] = float(input("Value of " + var + ": "))
     new_ast = simplified_ast.substitute_with_numbers(values)
 
-    print("\n*** Approximate result: ", end="")
-    print(new_ast.eval())
-    print("\n*** Exact result: ", end="")
-    print(new_ast.simplify().pretty_str(100))
+    print("*** Exact result: ", end="")
+    exact = new_ast.simplify()
+    print(exact.pretty_str(100))
+    if not exact.is_integer():
+      print("*** Approximate result: ", end="")
+      print(new_ast.eval())
   elif option == "3":
     print("\n*** Simplified: ", end="")
     print(simplified_ast.pretty_str(100))
