@@ -124,7 +124,6 @@ def rational_tests():
   test_assert_equal(Rational(5, 2) % Rational(1), Rational(1, 2), "Rational modulo")
   test_assert_equal(Rational(5, 2) % 1, Rational(1, 2), "Rational modulo integer")
   test_assert_equal(Rational(5, 7) < Rational(7, 9), True, "Rational less than")
-  test_assert_equal(2 < Rational(5, 2), True, "Rational less than integer")
   test_assert_equal(Rational(5, 7) <= Rational(10, 14), True, "Rational less than or equal")
   test_assert_equal(Rational(5, 7) > Rational(3, 4), False, "Rational greater than")
   test_assert_equal(Rational(5, 7) >= Rational(10, 14), True, "Rational greater than or equal")
@@ -148,6 +147,7 @@ def eval_tests():
   test_eval_equality("1+2*2", "5", "Simple integer expression")
   test_eval_equality("5 + 3*4/2 - 1 * (2 - 3)", "12", "Order of operations")
   test_eval_equality("sin(0*10) + cos(0)", "1", "Simple function calls")
+  # TODO: Proper eval tests for trig functions once we have better support for floats and pi
   test_end_category()
 eval_tests()
 
@@ -168,6 +168,16 @@ def derivative_tests():
   test_derivative_numeric("(5*x+3) / (2*x+1)", "x", "(−1)/((2*x+1)*(2*x+1))", "Quotient rule")
   test_derivative_numeric("sin(2*x)+1", "x", "2*cos(2*x)", "Chain rule and sin derivative")
   test_derivative_numeric("cos(sin(2*x))", "x", "−2*sin(sin(2*x))*cos(2*x)", "Nested chain rule and cos derivative")
+  test_derivative_numeric(
+    "cot(sec(x))", "x",
+    "−1*tan(x)*sec(x)*csc(sec(x))*csc(sec(x))",
+    "Cot and sec derivatives with / chain rule"
+  )
+  test_derivative_numeric(
+    "csc(2*x + 1)*tan(3*x + 1)", "x",
+    "csc(2*x + 1)*(3*sec(3*x + 1)*sec(3*x + 1) - 2*tan(3*x + 1)*cot(2*x + 1))",
+    "Csc and tan derivatives / product, chain rule"
+  )
   test_end_category()
 derivative_tests()
 

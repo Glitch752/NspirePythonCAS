@@ -1,6 +1,5 @@
 import cas_settings
 from cas_rational import Rational
-from math import sin, cos
 
 # Micropython's float implementation unfortunately
 # doesn't fall back to the __float__ magic method.
@@ -177,8 +176,12 @@ class ASTLebiniz(ASTNode):
       self
     ).simplify()
 
+# TODO: Refactor into separate file and organize better?
 class ASTFunctionCall(ASTNode):
   def __init__(self, name, argument):
+    if name not in ["sin", "cos", "tan", "csc", "sec", "cot"]:
+      raise Exception("Function " + name + " does not exist.")
+    
     self.name = name
     self.argument = argument
   
@@ -199,19 +202,55 @@ class ASTFunctionCall(ASTNode):
   def substitute(self, var, value):
     return ASTFunctionCall(self.name, self.argument.substitute(var, value))
   def eval(self):
+    from math import sin, cos, tan
     if self.name == "sin":
       return sin(self.argument.eval())
     elif self.name == "cos":
       return cos(self.argument.eval())
-    raise Exception("Unknown function: " + self.name)
+    elif self.name == "tan":
+      return tan(self.argument.eval())
+    elif self.name == "csc":
+      return 1 / sin(self.argument.eval())
+    elif self.name == "sec":
+      return 1 / cos(self.argument.eval())
+    elif self.name == "cot":
+      return 1 / tan(self.argument.eval())
+    raise Exception("Evaluation for function " + self.name + " is not implemented.")
   def derivative_f(self):
-    if self.name == "sin":
+    if self.name == "sin": # d/dx sin(x) = cos(x)
       return ASTFunctionCall("cos", self.argument)
-    elif self.name == "cos":
+    elif self.name == "cos": # d/dx cos(x) = -sin(x)
       return ASTMultiply(
         ASTNumber(-1),
         ASTFunctionCall("sin", self.argument)
       )
+    elif self.name == "tan": # d/dx tan(x) = sec(x)^2
+      return ASTMultiply(
+        ASTFunctionCall("sec", self.argument),
+        ASTFunctionCall("sec", self.argument)
+      )
+    elif self.name == "csc": # d/dx csc(x) = -csc(x)*cot(x)
+      return ASTMultiply(
+        ASTNumber(-1),
+        ASTMultiply(
+          ASTFunctionCall("csc", self.argument),
+          ASTFunctionCall("cot", self.argument)
+        )
+      )
+    elif self.name == "sec": # d/dx sec(x) = sec(x)*tan(x)
+      return ASTMultiply(
+        ASTFunctionCall("sec", self.argument),
+        ASTFunctionCall("tan", self.argument)
+      )
+    elif self.name == "cot": # d/dx cot(x) = -csc(x)^2
+      return ASTMultiply(
+        ASTNumber(-1),
+        ASTMultiply(
+          ASTFunctionCall("csc", self.argument),
+          ASTFunctionCall("csc", self.argument)
+        )
+      )
+    raise Exception("Derivative for function " + self.name + " is not implemented.")
   def derivative(self, var):
     return ASTMultiply(
       self.derivative_f(),

@@ -101,7 +101,7 @@ class ExpressionReducer:
         if term.constant % 1 != 0:
           coefficients = []
           break
-        coefficients.append(fabs(term.constant))
+        coefficients.append(abs(term.constant))
         all_negative &= term.constant < 0 
         
       if len(coefficients) > 0:
