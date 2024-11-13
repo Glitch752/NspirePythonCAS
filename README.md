@@ -2,7 +2,7 @@
 
 A small Python program I've been developing on my TI-NSpire CX II calculator to replicate the abilities of the CAS software. It's a work in progress, and it will probably never get very good, but it can take derivatives and simplify expressions in some ways.
 
-It consists of a simple tokenizer, parser, and evaluator with support for arithmetic, variables, and built-in functions (currently only `sin` and `cos`). For example, it can parse, evaluate, take the derivative of, and simplify something like `2*cos(5 + x*2) + 6*x*y`.
+It consists of a simple tokenizer, parser, and evaluator with support for arithmetic, variables, and built-in functions. For example, it can parse, evaluate, take the derivative of, and simplify something like `2*cos(5 + x*2) + 6*x*y`.
 
 The simplification is relatively basic; it supports constant folding, basic identities (e.g. `0*x = 0`, `1*x = x`, `x + 0 = x`, etc.), associative expression factoring (e.g. `2*x*y + 4*x*x*y` -> `2*x*y*(1 + 2*x)`), and some simple term rewriting (e.g. `x*y/x/x*y` -> `y*y/x`).
 
@@ -41,6 +41,7 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
 - [X] Internally represent numbers as rationals to avoid floating-point errors and allow exact simplification in more cases
 - [ ] Add support for symbolic constants like `pi`, `e`, etc. (probably regular variables with special names?)
 - [X] Add support for non-primary variables of differentiation so we can take partial derivatives
+- [ ] Store and calculate function domains and ranges
 - [ ] Add the ability to solve equations for specific variables symbolically
 - [ ] Add the ability to solve systems of equations symbolically
 - [ ] Add support for integrals (probably not going to happen)

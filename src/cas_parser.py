@@ -1,4 +1,5 @@
 from cas_ast import *
+from cas_functions import ASTFunctionCall
 import cas_settings
 from cas_rational import Rational
 
@@ -186,7 +187,7 @@ class Tokens:
     if self.p_take_if(TokenType.OPEN_PAREN):
       argument = self.p_expr()
       self.p_take_expect(TokenType.CLOSE_PAREN)
-      return ASTFunctionCall(ident.literal, argument)
+      return ASTFunctionCall.create(ident.literal, argument)
     return ASTVariable(ident.literal)
   
   

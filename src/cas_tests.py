@@ -139,6 +139,33 @@ def rational_tests():
   test_assert_equal(fast_2_gcd(5, 10), 5, "Fast GCD")
   test_assert_equal(fast_2_gcd(0, 3), 3, "Fast GCD zero")
   test_assert_equal(fast_2_gcd(Rational(3), Rational(6)), 3, "Fast GCD rationals")
+
+  # exact_rational_log tests
+  from cas_rational import exact_rational_log, prime_factors
+  
+  test_assert_equal(prime_factors(1), {}, "Prime factorization of 1")
+  test_assert_equal(prime_factors(2), {2: 1}, "Prime factorization of 2")
+  test_assert_equal(prime_factors(3), {3: 1}, "Prime factorization of 3")
+  test_assert_equal(prime_factors(6), {2: 1, 3: 1}, "Prime factorization of 6")
+  test_assert_equal(prime_factors(60), {2: 2, 3: 1, 5: 1}, "Prime factorization of 60") # 2^2 * 3 * 5
+  test_assert_equal(prime_factors(27), {3: 3}, "Prime factorization of 27")
+
+  test_assert_equal(exact_rational_log(Rational(1), Rational(1)), Rational(0), "log_1(1) = 0")
+  test_assert_equal(exact_rational_log(Rational(5), Rational(1)), None, "log_1(5) = None")
+  test_assert_equal(exact_rational_log(Rational(1), Rational(2, 19)), Rational(0), "log_2/19(1) = 0")
+  test_assert_equal(exact_rational_log(Rational(2, 3), Rational(2, 3)), Rational(1), "log_2/3(2/3) = 1")
+  test_assert_equal(exact_rational_log(Rational(3, 2), Rational(2, 3)), Rational(-1), "log_2/3(3/2) = -1")
+  test_assert_equal(exact_rational_log(Rational(27), Rational(1, 3)), Rational(-3), "log_1/3(27) = -3")
+  test_assert_equal(exact_rational_log(Rational(3), Rational(9)), Rational(1, 2), "log_9(3) = 1/2")
+  test_assert_equal(exact_rational_log(Rational(0), Rational(1)), None, "log_1(0) = None")
+  test_assert_equal(exact_rational_log(Rational(1), Rational(0)), None, "log_0(1) = None")
+  test_assert_equal(exact_rational_log(Rational(-1), Rational(2)), None, "log_2(-1) = None")
+  test_assert_equal(exact_rational_log(Rational(1, 4), Rational(2)), Rational(-2), "log_2(1/4) = -2")
+  test_assert_equal(exact_rational_log(Rational(5), Rational(2)), None, "log_2(5) = None") # Irrational
+  test_assert_equal(exact_rational_log(Rational(4), Rational(-2)), None, "log_-2(4) = None")
+  # test_assert_equal(exact_rational_log(Rational(100), Rational(10)), Rational(2), "log_10(100) = 2") # Large numbers, slow
+  test_assert_equal(exact_rational_log(Rational(2, 5), Rational(4, 25)), Rational(1, 2), "log_4/25(2/5) = 1/2")
+
   test_end_category()
 rational_tests()
 

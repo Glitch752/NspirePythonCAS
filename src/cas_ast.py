@@ -84,6 +84,8 @@ class ASTNode:
     raise Exception("Implement me!")
 
   # Helper functions
+  def is_constant(self):
+    return isinstance(self, ASTConstant)
   def is_number(self):
     return isinstance(self, ASTNumber)
   def is_integer(self):
@@ -95,7 +97,39 @@ class ASTNode:
   def is_term(self):
     return isinstance(self, (ASTMultiply, ASTDivide))
 
-class ASTNumber(ASTNode):
+class ASTConstant(ASTNode):
+  def __init__(self):
+    if type(self) == ASTConstant:
+      raise Exception("Cannot create an instance of ASTConstant. Use a subclass instead.")
+    self.number = None
+  
+  def derivative(self, var):
+    return ASTNumber(0)
+  
+  def eval(self):
+    return to_float(self.number)
+
+# TODO: Tests
+class ASTPi(ASTConstant):
+  def __init__(self):
+    from math import pi
+    self.number = pi
+  def pretty_str(self, precidence):
+    return "π"
+  def __str__(self):
+    return "π"
+
+# TODO: Tests
+class ASTEuler(ASTConstant):
+  def __init__(self):
+    from math import e
+    self.number = e
+  def pretty_str(self, precidence):
+    return "e"
+  def __str__(self):
+    return "e"
+
+class ASTNumber(ASTConstant):
   def __init__(self, number):
     if cas_settings.USE_RATIONALS and isinstance(number, int):
       self.number = Rational(number)
@@ -113,12 +147,6 @@ class ASTNumber(ASTNode):
   
   def negate(self):
     return ASTNumber(self.number * -1)
-  def eval(self):
-    if cas_settings.USE_RATIONALS:
-      return to_float(self.number)
-    return self.number
-  def derivative(self, var):
-    return ASTNumber(0)
 
 class ASTVariable(ASTNode):
   def __init__(self, name):
@@ -174,87 +202,6 @@ class ASTLebiniz(ASTNode):
     return ASTMultiply(
       ASTLebiniz(self.main, var, 1),
       self
-    ).simplify()
-
-# TODO: Refactor into separate file and organize better?
-class ASTFunctionCall(ASTNode):
-  def __init__(self, name, argument):
-    if name not in ["sin", "cos", "tan", "csc", "sec", "cot"]:
-      raise Exception("Function " + name + " does not exist.")
-    
-    self.name = name
-    self.argument = argument
-  
-  def pretty_str(self, precidence):
-    return self.name + "(" + self.argument.pretty_str(100) + ")"
-  def __str__(self):
-    return self.name + "(" + str(self.argument) + ")"
-  
-  def reduce(self, state):
-    return ASTFunctionCall(self.name, self.argument.reduce(state.after(self)))
-  def expand(self, state):
-    return ASTFunctionCall(self.name, self.argument.expand(state.after(self)))
-
-  def traverse(self, func):
-    self.argument.traverse(func)
-    func(self)
-
-  def substitute(self, var, value):
-    return ASTFunctionCall(self.name, self.argument.substitute(var, value))
-  def eval(self):
-    from math import sin, cos, tan
-    if self.name == "sin":
-      return sin(self.argument.eval())
-    elif self.name == "cos":
-      return cos(self.argument.eval())
-    elif self.name == "tan":
-      return tan(self.argument.eval())
-    elif self.name == "csc":
-      return 1 / sin(self.argument.eval())
-    elif self.name == "sec":
-      return 1 / cos(self.argument.eval())
-    elif self.name == "cot":
-      return 1 / tan(self.argument.eval())
-    raise Exception("Evaluation for function " + self.name + " is not implemented.")
-  def derivative_f(self):
-    if self.name == "sin": # d/dx sin(x) = cos(x)
-      return ASTFunctionCall("cos", self.argument)
-    elif self.name == "cos": # d/dx cos(x) = -sin(x)
-      return ASTMultiply(
-        ASTNumber(-1),
-        ASTFunctionCall("sin", self.argument)
-      )
-    elif self.name == "tan": # d/dx tan(x) = sec(x)^2
-      return ASTMultiply(
-        ASTFunctionCall("sec", self.argument),
-        ASTFunctionCall("sec", self.argument)
-      )
-    elif self.name == "csc": # d/dx csc(x) = -csc(x)*cot(x)
-      return ASTMultiply(
-        ASTNumber(-1),
-        ASTMultiply(
-          ASTFunctionCall("csc", self.argument),
-          ASTFunctionCall("cot", self.argument)
-        )
-      )
-    elif self.name == "sec": # d/dx sec(x) = sec(x)*tan(x)
-      return ASTMultiply(
-        ASTFunctionCall("sec", self.argument),
-        ASTFunctionCall("tan", self.argument)
-      )
-    elif self.name == "cot": # d/dx cot(x) = -csc(x)^2
-      return ASTMultiply(
-        ASTNumber(-1),
-        ASTMultiply(
-          ASTFunctionCall("csc", self.argument),
-          ASTFunctionCall("csc", self.argument)
-        )
-      )
-    raise Exception("Derivative for function " + self.name + " is not implemented.")
-  def derivative(self, var):
-    return ASTMultiply(
-      self.derivative_f(),
-      self.argument.derivative(var)
     ).simplify()
 
 class ASTAdd(ASTNode):
@@ -509,4 +456,154 @@ class ASTDivide(ASTNode):
       ),
       # ... / b**2
       ASTMultiply(self.denominator, self.denominator)
+    ).simplify()
+
+# TODO: Extensive tests
+class ASTPower(ASTNode):
+  precidence = 2
+  def __init__(self, base, exponent):
+    self.base = base
+    self.exponent = exponent
+  
+  def pretty_str(self, precidence):
+    string = self.base.pretty_str(ASTPower.precidence) + "^" + self.exponent.pretty_str(ASTPower.precidence)
+    if precidence < ASTPower.precidence:
+      string = "(" + string + ")"
+    return string
+
+  def __str__(self):
+    return "(" + str(self.base) + "^" + str(self.exponent) + ")"
+  
+  def reduce(self, original_state):
+    state = original_state.after(self)
+    
+    base = self.base.reduce(state)
+    exponent = self.exponent.reduce(state)
+    # This results in the ambiguous 0^0 case being 0.
+    # Maybe this should be a setting or warning?
+    if base.is_exactly(0):
+      return ASTNumber(0)
+    if exponent.is_exactly(0):
+      return ASTNumber(1)
+    if base.is_exactly(1):
+      return ASTNumber(1)
+    if base.is_number() and exponent.is_number():
+      result = base.number ** exponent.number
+      # When rational numbers are enabled and the result is not a rational number
+      if result == None:
+        return self
+      return ASTNumber(result)
+    
+    simplified_self = ASTPower(base, exponent)
+    return simplified_self
+
+  def expand(self, state):
+    # TODO
+    return ASTPower(self.base.expand(state), self.exponent.expand(state))
+  
+  def traverse(self, func):
+    self.base.traverse(func)
+    self.exponent.traverse(func)
+    func(self)
+  
+  def substitute(self, var, value):
+    return ASTPower(
+      self.base.substitute(var, value),
+      self.exponent.substitute(var, value)
+    )
+
+  def eval(self):
+    return self.base.eval() ** self.exponent.eval()
+  
+  def derivative(self, var):
+    # (f(x)^g(x))' = f(x)^g(x) * (f'(x)/f(x) * g(x) + g'(x) * ln(f(x)))
+    return ASTMultiply(
+      self,
+      ASTAdd(
+        ASTMultiply(
+          ASTDivide(self.base.derivative(var), self.base),
+          self.exponent
+        ),
+        ASTMultiply(
+          self.exponent.derivative(var),
+          ASTLogarithm(ASTEuler(), self.base)
+        )
+      )
+    ).simplify()
+
+# TODO: Extensive tests
+class ASTLogarithm(ASTNode):
+  precidence = 100
+  def __init__(self, base, argument):
+    self.base = base
+    self.argument = argument
+  
+  def pretty_str(self, precidence):
+    if self.base == ASTEuler():
+      string = "ln"
+    else:
+      string = "log_" + self.base.pretty_str(ASTLogarithm.precidence)
+    string += "(" + self.argument.pretty_str(ASTLogarithm.precidence) + ")"
+    if precidence < ASTLogarithm.precidence:
+      string = "(" + string + ")"
+    return string
+  def __str__(self):
+    return "log" + str(self.base) + "(" + str(self.argument) + ")"
+  
+  def reduce(self, original_state):
+    state = original_state.after(self)
+    
+    base = self.base.reduce(state)
+    argument = self.argument.reduce(state)
+    if base.is_exactly(1):
+      # This is a special case because log_1(x) is undefined.
+      # Returning 0 isn't correct, but it's better than nothing.
+      # Maybe this should be a warning until we properly represent function domains?
+      return ASTNumber(0)
+    if argument.is_exactly(1):
+      return ASTNumber(0)
+    
+    if base.is_number() and argument.is_number():
+      import cas_settings
+      import math
+
+      if cas_settings.USE_RATIONALS:
+        from cas_rational import exact_rational_log
+        result = exact_rational_log(argument.number, base.number)
+        # When rational numbers are enabled and the result is not a rational number
+        if result == None:
+          return self
+        return ASTNumber(result)
+      
+      return ASTNumber(math.log(argument.number, base.number))
+    
+    simplified_self = ASTLogarithm(base, argument)
+    return simplified_self
+
+  def expand(self, state):
+    # TODO
+    return ASTLogarithm(self.base.expand(state), self.argument.expand(state))
+  
+  def traverse(self, func):
+    self.base.traverse(func)
+    self.argument.traverse(func)
+    func(self)
+  
+  def substitute(self, var, value):
+    return ASTLogarithm(
+      self.base.substitute(var, value),
+      self.argument.substitute(var, value)
+    )
+
+  def eval(self):
+    return math.log(self.argument.eval(), self.base.eval())
+  
+  def derivative(self, var):
+    # (log_b(f(x)))' = f'(x) / (f(x) * ln(b))
+    return ASTDivide(
+      self.argument.derivative(var),
+      ASTMultiply(
+        self.argument,
+        ASTLogarithm(ASTEuler(), self.base)
+      )
     ).simplify()
