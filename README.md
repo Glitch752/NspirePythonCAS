@@ -29,17 +29,21 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
   - [X] All main trig functions: `tan`, `csc`, `sec`, `cot`
   - [ ] All main inverse trig functions: `asin`, `acos`, `atan`, `acsc`, `asec`, `acot`
 - [ ] Improve code for functions
-  - [ ] Refactor into separate file, maybe use classes and inheritance?
+  - [X] Refactor into separate file, maybe use classes and inheritance?
   - [ ] Add support for user-defined functions
   - [ ] Add name aliases for functions (e.g. `arcsin` for `asin`)
-- [ ] Support decimals and other number representations
+- [ ] Support decimals and other number representations in the parser
   - [ ] When parsing, decide between subtract and negative number so we don't need to use the `−` character
 - [ ] Improve simplification
   - [ ] Add trig identities
-- [ ] Add exponentiation support
-  - [ ] Add support for logarithms (maybe not a built-in function? Would need support for multiple arguments)
+  - [X] Implement exact trig function simplification (e.g. `sin(pi/2) = 1`)
+- [ ] Refactor to store expressions and terms as lists of nodes instead of trees of 2-child nodes
+  - This removes the requirement to use our current ExpressionReducer and TermReducer system, while also making parsing easier.
+- [X] Add exponentiation support
+  - [X] Add support for logarithms
+- [ ] Represent undefined values instead of simplifying to 0 in many cases (e.g. `csc(pi)=0` in our current implementation)
 - [X] Internally represent numbers as rationals to avoid floating-point errors and allow exact simplification in more cases
-- [ ] Add support for symbolic constants like `pi`, `e`, etc. (probably regular variables with special names?)
+- [X] Add support for symbolic constants like `pi`, `e`, etc. (probably regular variables with special names?)
 - [X] Add support for non-primary variables of differentiation so we can take partial derivatives
 - [ ] Store and calculate function domains and ranges
 - [ ] Add the ability to solve equations for specific variables symbolically

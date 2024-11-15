@@ -86,6 +86,16 @@ class ASTNode:
   # Helper functions
   def is_constant(self):
     return isinstance(self, ASTConstant)
+  # TODO: There's definitely a more general way to implement this, but this works for now.
+  def is_2pi_multiple(self, quarter_pi_offset):
+    # Assumes the left of multiplication with pi is the number, which is currently always the case after simplification.
+    if (self.is_exactly(0) and quarter_pi_offset == 0) or (isinstance(self, ASTPi) and quarter_pi_offset == 4):
+      return True
+    offset = Rational(quarter_pi_offset, 4) if cas_settings.USE_RATIONALS else quarter_pi_offset / 4
+    if isinstance(self, ASTMultiply) and self.left.is_number() and isinstance(self.right, ASTPi):
+      offset_coefficient = (self.left.number - offset) / 2
+      return offset_coefficient == int(offset_coefficient)
+    return False
   def is_number(self):
     return isinstance(self, ASTNumber)
   def is_integer(self):
@@ -128,6 +138,12 @@ class ASTEuler(ASTConstant):
     return "e"
   def __str__(self):
     return "e"
+
+builtin_variables = {
+  "E": ASTEuler(),
+  "pi": ASTPi(),
+  "π": ASTPi()
+}
 
 class ASTNumber(ASTConstant):
   def __init__(self, number):
@@ -483,10 +499,15 @@ class ASTPower(ASTNode):
     # Maybe this should be a setting or warning?
     if base.is_exactly(0):
       return ASTNumber(0)
+    
     if exponent.is_exactly(0):
       return ASTNumber(1)
+    if exponent.is_exactly(1):
+      return base
+    
     if base.is_exactly(1):
       return ASTNumber(1)
+    
     if base.is_number() and exponent.is_number():
       result = base.number ** exponent.number
       # When rational numbers are enabled and the result is not a rational number
@@ -513,6 +534,10 @@ class ASTPower(ASTNode):
     )
 
   def eval(self):
+    if self.base.is_exactly(0) and self.exponent.is_exactly(0):
+      # This is an ambiguous case; 0^0 is undefined. We should probably make this a setting and warning.
+      return 0
+    # This _can_ return complex numbers, but it's fine in evaluation for now.
     return self.base.eval() ** self.exponent.eval()
   
   def derivative(self, var):
@@ -533,7 +558,7 @@ class ASTPower(ASTNode):
 
 # TODO: Extensive tests
 class ASTLogarithm(ASTNode):
-  precidence = 100
+  precidence = 0
   def __init__(self, base, argument):
     self.base = base
     self.argument = argument
@@ -542,11 +567,18 @@ class ASTLogarithm(ASTNode):
     if self.base == ASTEuler():
       string = "ln"
     else:
-      string = "log_" + self.base.pretty_str(ASTLogarithm.precidence)
+      string = "log_"
+      if self.base.is_number():
+        string += self.base.pretty_str(ASTLogarithm.precidence)
+      else:
+        # Maybe this should be a setting to adjust what parentheses are used?
+        # I don't think it's a huge deal.
+        string += "[" + self.base.pretty_str(ASTLogarithm.precidence) + "]"
     string += "(" + self.argument.pretty_str(ASTLogarithm.precidence) + ")"
     if precidence < ASTLogarithm.precidence:
       string = "(" + string + ")"
     return string
+  
   def __str__(self):
     return "log" + str(self.base) + "(" + str(self.argument) + ")"
   
@@ -555,6 +587,7 @@ class ASTLogarithm(ASTNode):
     
     base = self.base.reduce(state)
     argument = self.argument.reduce(state)
+    
     if base.is_exactly(1):
       # This is a special case because log_1(x) is undefined.
       # Returning 0 isn't correct, but it's better than nothing.
@@ -572,13 +605,56 @@ class ASTLogarithm(ASTNode):
         result = exact_rational_log(argument.number, base.number)
         # When rational numbers are enabled and the result is not a rational number
         if result == None:
-          return self
+          return ASTLogarithm(base, argument)
         return ASTNumber(result)
       
       return ASTNumber(math.log(argument.number, base.number))
     
-    simplified_self = ASTLogarithm(base, argument)
-    return simplified_self
+    # TODO: These should probably be behind a setting or explicit user request.
+    
+    # log_b(b) = 1 if b != 1
+    if base == argument and not base.is_exactly(1):
+      # Handles ln(e) = 1
+      return ASTNumber(1)
+    
+    # log_b(a) = ln(a) / ln(b)
+    if not base.is_constant():
+      return ASTDivide(
+        ASTLogarithm(ASTEuler(), argument),
+        ASTLogarithm(ASTEuler(), base)
+      ).reduce(state)
+    
+    # log_b(a^c) = c * log_b(a)
+    if isinstance(argument, ASTPower):
+      return ASTMultiply(
+        argument.exponent,
+        ASTLogarithm(base, argument.base)
+      ).reduce(state)
+    
+    # log_b(a * c) = log_b(a) + log_b(c)
+    if isinstance(argument, ASTMultiply):
+      # TODO: We should do this in a better way; this is hopefully temporary...
+      if argument.left.is_number() and isinstance(argument.left.number, Rational):
+        numerator = ASTMultiply(ASTNumber(argument.left.number.numerator), argument.right)
+        denominator = ASTNumber(argument.left.number.denominator)
+        return ASTSubtract(
+          ASTLogarithm(base, numerator),
+          ASTLogarithm(base, denominator)
+        )
+      
+      return ASTAdd(
+        ASTLogarithm(base, argument.left),
+        ASTLogarithm(base, argument.right)
+      ).reduce(state)
+    
+    # log_b(a / c) = log_b(a) - log_b(c)
+    if isinstance(argument, ASTDivide):
+      return ASTSubtract(
+        ASTLogarithm(base, argument.numerator),
+        ASTLogarithm(base, argument.denominator)
+      ).reduce(state)
+    
+    return ASTLogarithm(base, argument)
 
   def expand(self, state):
     # TODO
@@ -596,7 +672,8 @@ class ASTLogarithm(ASTNode):
     )
 
   def eval(self):
-    return math.log(self.argument.eval(), self.base.eval())
+    from math import log
+    return log(self.argument.eval(), self.base.eval())
   
   def derivative(self, var):
     # (log_b(f(x)))' = f'(x) / (f(x) * ln(b))

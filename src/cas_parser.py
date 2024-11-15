@@ -4,9 +4,9 @@ import cas_settings
 from cas_rational import Rational
 
 def is_letter(c):
-  return "a"<=c<="z" or "A"<=c<="Z"
+  return "a" <= c <= "z" or "A" <= c <= "Z"
 def is_number(c):
-  return "0"<=c<="9"
+  return "0" <= c <= "9"
 
 class TokenType:
   NUMBER = 0
@@ -17,6 +17,9 @@ class TokenType:
   DIVIDE = 5
   ADD = 6
   SUBTRACT = 7
+  EXPONENT = 8
+  # Used in logarithms
+  UNDERSCORE = 9
 
 token_names = {}
 token_chars = {}
@@ -36,34 +39,42 @@ add_tok(TokenType.MULTIPLY, "Multiply", "*")
 add_tok(TokenType.DIVIDE, "Divide", "/")
 add_tok(TokenType.ADD, "Add", "+")
 add_tok(TokenType.SUBTRACT, "Subtract", "-")
+add_tok(TokenType.EXPONENT, "Exponent", "^")
+add_tok(TokenType.UNDERSCORE, "Underscore", "_")
 
 class Token:
   def __init__(self, type, literal):
     self.type = type
     self.literal = literal
-  def print(self):
-    print(token_names[self.type]+"(", end="")
+  def __str__(self):
+    string = token_names[self.type] + "("
+    
     if self.type == TokenType.NUMBER:
-      print(self.literal, end="")
+      string += str(self.literal)
     elif self.type == TokenType.IDENTIFIER:
-      print('"'+self.literal+'"', end="")
-    print("", end="")
-    print(") ", end="")
+      string += '"' + str(self.literal) + '"'
+    
+    string += ")"
+    return string
+  def __repr__(self):
+    return str(self)
 
 class Tokens:
   def __init__(self, str):
     self.str = str
     self.idx = 0
     self.list = []
+  
   def test_token_chars(self):
     to_test = min(len(self.str) - self.idx, longest_token_char)
-    for i in range(longest_token_char, 0, -1):
+    for i in range(to_test, 0, -1):
       chars = self.str[self.idx : self.idx + i]
       if chars in token_chars:
         self.list.append(Token(token_chars[chars], chars))
         self.idx += i
         return True
     return False
+  
   def test_identifier(self):
     ident = ""
     while self.idx < len(self.str) and \
@@ -74,6 +85,7 @@ class Tokens:
       self.list.append(Token(TokenType.IDENTIFIER, ident))
       return True
     return False
+  
   def test_number(self):
     # TODO: More number formats including decimals
     # TODO: Somehow decide between subtract and negative number so we don't need to use −
@@ -83,8 +95,7 @@ class Tokens:
     if self.str[self.idx] in negative_symbols:
       num = "-"
       self.idx += 1
-    while self.idx < len(self.str) and \
-       is_number(self.str[self.idx]):
+    while self.idx < len(self.str) and is_number(self.str[self.idx]):
       num += self.str[self.idx]
       self.idx += 1
     if len(num) > 0:
@@ -95,8 +106,9 @@ class Tokens:
       return True
     
     return False
+  
   def parse(self):
-    self.list=[]
+    self.list = []
     while self.idx < len(self.str):
       char = self.str[self.idx]
       
@@ -107,20 +119,28 @@ class Tokens:
       if self.test_number():
         continue
       
-      self.idx += 1
+      if char == " ":
+        self.idx += 1
+        continue
+      
+      # This is an unknown character
+      raise Exception("Unknown character: " + char)
   
   def p_error(self, err):
     # TODO: store token positions, better errors
     print(err)
     raise Exception(err)
+  
   def p_peek(self):
     if self.idx >= len(self.list):
       self.p_error("Unexpected end")
     return self.list[self.idx]
+  
   def p_peek_next(self):
     if self.idx+1 >= len(self.list):
       self.p_error("Unexpected end")
     return self.list[self.idx+1]
+  
   def p_take_if(self, type):
     if self.idx == len(self.list):
       return None
@@ -129,29 +149,36 @@ class Tokens:
       self.idx += 1
       return tok
     return None
+  
   def p_take_expect(self, type):
     tok = self.p_peek()
     if tok.type == type:
       self.idx += 1
       return tok
-    self.p_error("Expected "+token_names[type]+", found "+token_names[tok.type])
+    self.p_error("Expected " + token_names[type] + ", found " + token_names[tok.type])
+    
   def p_take(self):
     tok = self.p_peek()
     self.idx += 1
     return tok
+
   def to_ast(self):
     self.idx = 0
-    return self.p_expr()
+    expression = self.p_expr()
+    if self.idx < len(self.list):
+      self.p_error("Unexpected tokens at end of input: " + str(self.list[self.idx:]))
+    return expression
   
   # Recursive descent parser grammar:
-  # Expression -> Term (+|- Term)*
-  # Term -> Factor (*|/ Factor)*
+  # Expression -> Term ((+ | -) Term)*
+  # Term -> Power ((* | /) Power)*
+  # Power -> Factor (^ Factor)*
   # Factor -> Number | (Expression) | FunctionCall | Identifier
-  # FunctionCall -> Identifier ( Expression )
+  # FunctionCall -> Identifier (Expression)
+  
   def p_expr(self):
     node = self.p_term()
-    while self.idx < len(self.list)  and \
-     self.p_peek().type in [TokenType.ADD, TokenType.SUBTRACT]:
+    while self.idx < len(self.list) and self.p_peek().type in [TokenType.ADD, TokenType.SUBTRACT]:
       op = self.p_take()
       right = self.p_term()
       if op.type == TokenType.ADD:
@@ -159,17 +186,28 @@ class Tokens:
       else:
         node = ASTSubtract(node, right)
     return node
+
   def p_term(self):
-    node = self.p_factor()
-    while self.idx < len(self.list)  and \
-     self.p_peek().type in [TokenType.MULTIPLY, TokenType.DIVIDE]:
+    node = self.p_power()
+    while self.idx < len(self.list) and self.p_peek().type in [TokenType.MULTIPLY, TokenType.DIVIDE]:
       op = self.p_take()
-      right = self.p_factor()
+      right = self.p_power()
       if op.type == TokenType.MULTIPLY:
         node = ASTMultiply(node, right)
       else:
         node = ASTDivide(node, right)
     return node
+
+  # Right-associative
+  def p_power(self):
+    node = self.p_factor()
+    if self.idx < len(self.list) and self.p_peek().type == TokenType.EXPONENT:
+      self.p_take()
+      # Recursive for right associativity
+      right = self.p_power()
+      node = ASTPower(node, right)
+    return node
+
   def p_factor(self):
     tok = self.p_peek()
     if tok.type == TokenType.NUMBER:
@@ -181,15 +219,38 @@ class Tokens:
       return node
     elif tok.type == TokenType.IDENTIFIER:
       return self.p_ident_or_func()
-    self.p_error("Unexpected token: "+token_names[tok.type])
+
+    self.p_error("Unexpected token: " + token_names[tok.type])
+  
   def p_ident_or_func(self):
     ident = self.p_take()
+    
+    if ident.literal == "log" and self.p_take_if(TokenType.UNDERSCORE):
+      # This is a logarithm
+      # If the next token is a number, we have a log with a specified base
+      # If not, expect parentheses and an argument
+      base = None
+      if self.p_peek().type == TokenType.NUMBER:
+        base = self.p_take().literal
+      else:
+        self.p_take_expect(TokenType.OPEN_PAREN)
+        base = self.p_expr()
+        self.p_take_expect(TokenType.CLOSE_PAREN)
+      
+      self.p_take_expect(TokenType.OPEN_PAREN)
+      argument = self.p_expr()
+      self.p_take_expect(TokenType.CLOSE_PAREN)
+      return ASTLogarithm(base, argument)
+
     if self.p_take_if(TokenType.OPEN_PAREN):
       argument = self.p_expr()
       self.p_take_expect(TokenType.CLOSE_PAREN)
       return ASTFunctionCall.create(ident.literal, argument)
+    
+    if ident.literal in builtin_variables:
+      return builtin_variables[ident.literal]
+    
     return ASTVariable(ident.literal)
-  
   
   def print(self):
     print("Tokens: ")
