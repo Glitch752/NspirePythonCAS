@@ -25,8 +25,8 @@ class ASTFunctionCall(ASTNode):
   
   def reduce(self, state):
     return ASTFunctionCall.create(self.name, self.argument.reduce(state.after(self)))
-  def expand(self, state):
-    return ASTFunctionCall.create(self.name, self.argument.expand(state.after(self)))
+  def distribute(self, state):
+    return ASTFunctionCall.create(self.name, self.argument.distribute(state.after(self)))
 
   def traverse(self, func):
     self.argument.traverse(func)
@@ -43,6 +43,9 @@ class ASTFunctionCall(ASTNode):
       self.derivative_f(),
       self.argument.derivative(var)
     ).simplify()
+  
+  def is_constant(self):
+    return self.argument.is_constant()
 
 
 class FunctionSin(ASTFunctionCall):

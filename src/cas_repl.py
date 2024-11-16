@@ -39,6 +39,7 @@ while True:
       print("*** Approximate result: ", end="")
       print(new_ast.eval())
   elif option == "3":
+    # TODO: Expand_logarithms should be only used on explicit user request
     simplified_ast = ast.simplify(expand_logarithms=True) # TODO: Allow the user to configure this
     print("\n*** Simplified: ", end="")
     print(simplified_ast.pretty_str(100))

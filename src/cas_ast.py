@@ -23,8 +23,8 @@ class SimplifyState:
     return SimplifyState(node, self.sort_terms, self.expand_logarithms)
   def reduce(self, node):
     return node.reduce(self)
-  def expand(self, node):
-    return node.expand(self)
+  def distribute(self, node):
+    return node.distribute(self)
 
 class ASTNode:
   precidence = 0
@@ -55,10 +55,11 @@ class ASTNode:
 
   # Don't override this; override reduce and expand instead
   def simplify(self, sort_terms=False, expand_logarithms=True):
-    return self.expand(SimplifyState()).reduce(SimplifyState(sort_terms=sort_terms, expand_logarithms=expand_logarithms))
+    state = SimplifyState(sort_terms=sort_terms, expand_logarithms=expand_logarithms)
+    return self.distribute(state).reduce(state)
   def reduce(self, state):
     return self
-  def expand(self, state):
+  def distribute(self, state):
     # TODO: Implement in subclasses
     return self
   
@@ -86,7 +87,7 @@ class ASTNode:
 
   # Helper functions
   def is_constant(self):
-    return isinstance(self, ASTConstant)
+    return False
   # TODO: There's definitely a more general way to implement this, but this works for now.
   def is_2pi_multiple(self, quarter_pi_offset):
     # Assumes the left of multiplication with pi is the number, which is currently always the case after simplification.
@@ -119,6 +120,9 @@ class ASTConstant(ASTNode):
   
   def eval(self):
     return to_float(self.number)
+
+  def is_constant(self):
+    return True
 
 # TODO: Tests
 class ASTPi(ASTConstant):
@@ -252,9 +256,9 @@ class ASTAdd(ASTNode):
     
     from cas_simplify_expr import ExpressionReducer
     return ExpressionReducer(simplified_self, original_state).reduce().to_ast().reduce(state)
-  def expand(self, state):
+  def distribute(self, state):
     # TODO
-    return ASTAdd(self.left.expand(state), self.right.expand(state))
+    return ASTAdd(self.left.distribute(state), self.right.distribute(state))
   
   def traverse(self, func):
     self.left.traverse(func)
@@ -273,6 +277,9 @@ class ASTAdd(ASTNode):
      self.left.derivative(var),
      self.right.derivative(var)
     ).simplify()
+  
+  def is_constant(self):
+    return self.left.is_constant() and self.right.is_constant()
 
 class ASTSubtract(ASTNode):
   precidence = 4
@@ -314,9 +321,9 @@ class ASTSubtract(ASTNode):
     
     from cas_simplify_expr import ExpressionReducer
     return ExpressionReducer(simplified_self, original_state).reduce().to_ast().reduce(state)
-  def expand(self, state):
+  def distribute(self, state):
     # TODO
-    return ASTSubtract(self.left.expand(state), self.right.expand(state))
+    return ASTSubtract(self.left.distribute(state), self.right.distribute(state))
   
   def traverse(self, func):
     self.left.traverse(func)
@@ -335,6 +342,9 @@ class ASTSubtract(ASTNode):
      self.left.derivative(var),
      self.right.derivative(var)
     ).simplify()
+  
+  def is_constant(self):
+    return self.left.is_constant() and self.right.is_constant()
 
 class ASTMultiply(ASTNode):
   precidence = 3
@@ -351,7 +361,12 @@ class ASTMultiply(ASTNode):
       return "-" + right.pretty_str(ASTMultiply.precidence)
 
     left_string = left.pretty_str(ASTMultiply.precidence)
-    add_multiply = right.is_number() or (
+    # This is super hacky, but it works for now lol
+    add_multiply = not left_string[-1] == ")" and (
+        not left.is_number() and
+        not left.is_term() and
+        not (isinstance(left, ASTPi) or isinstance(left, ASTEuler))
+      ) or (
         (isinstance(right, ASTMultiply) and right.left.is_number()) or \
         (isinstance(right, ASTDivide) and right.numerator.is_number())
       ) or "a" <= left_string[-1] <= "z"
@@ -389,9 +404,9 @@ class ASTMultiply(ASTNode):
   
     from cas_simplify_expr import ExpressionTerm
     return ExpressionTerm(simplified_self, original_state).reduce().to_ast().reduce(state)
-  def expand(self, state):
+  def distribute(self, state):
     # TODO
-    return ASTMultiply(self.left.expand(state), self.right.expand(state))
+    return ASTMultiply(self.left.distribute(state), self.right.distribute(state))
   
   def traverse(self, func):
     self.left.traverse(func)
@@ -410,6 +425,9 @@ class ASTMultiply(ASTNode):
       ASTMultiply(self.left, self.right.derivative(var)),
       ASTMultiply(self.right, self.left.derivative(var))
     ).simplify()
+  
+  def is_constant(self):
+    return self.left.is_constant() and self.right.is_constant()
 
 class ASTDivide(ASTNode):
   precidence = 3
@@ -448,9 +466,9 @@ class ASTDivide(ASTNode):
   
     from cas_simplify_expr import ExpressionTerm
     return ExpressionTerm(simplified_self, original_state).reduce().to_ast().reduce(state)
-  def expand(self, state):
+  def distribute(self, state):
     # TODO
-    return ASTDivide(self.numerator.expand(state), self.denominator.expand(state))
+    return ASTDivide(self.numerator.distribute(state), self.denominator.distribute(state))
   
   def traverse(self, func):
     self.numerator.traverse(func)
@@ -475,8 +493,10 @@ class ASTDivide(ASTNode):
       # ... / b**2
       ASTMultiply(self.denominator, self.denominator)
     ).simplify()
+  
+  def is_constant(self):
+    return self.numerator.is_constant() and self.denominator.is_constant()
 
-# TODO: Extensive tests
 class ASTPower(ASTNode):
   precidence = 2
   def __init__(self, base, exponent):
@@ -520,9 +540,9 @@ class ASTPower(ASTNode):
     simplified_self = ASTPower(base, exponent)
     return simplified_self
 
-  def expand(self, state):
+  def distribute(self, state):
     # TODO
-    return ASTPower(self.base.expand(state), self.exponent.expand(state))
+    return ASTPower(self.base.distribute(state), self.exponent.distribute(state))
   
   def traverse(self, func):
     self.base.traverse(func)
@@ -543,6 +563,33 @@ class ASTPower(ASTNode):
     return self.base.eval() ** self.exponent.eval()
   
   def derivative(self, var):
+    # There are a few simpler cases that we can take shortcuts
+    # in to avoid unnecessary calculations. These aren't technically
+    # necessary, but they speed up processing.
+
+    # Function to the power of a constant
+    # f(x)^C = C * f(x)^(C-1) * f'(x)
+    if self.exponent.is_constant():
+      return ASTMultiply(
+        ASTMultiply(
+          self.exponent,
+          ASTPower(self.base, ASTSubtract(self.exponent, ASTNumber(1))),
+        ),
+        self.base.derivative(var)
+      ).simplify()
+    
+    # Constant to the power of a function
+    # C^g(x) = C^g(x) * ln(C) * g'(x)
+    if self.base.is_constant():
+      return ASTMultiply(
+        ASTPower(self.base, self.exponent),
+        ASTMultiply(
+          ASTLn(self.base),
+          self.exponent.derivative(var)
+        )
+      ).simplify()
+    
+    # The general case:
     # (f(x)^g(x))' = f(x)^g(x) * (f'(x)/f(x) * g(x) + g'(x) * ln(f(x)))
     return ASTMultiply(
       self,
@@ -553,12 +600,14 @@ class ASTPower(ASTNode):
         ),
         ASTMultiply(
           self.exponent.derivative(var),
-          ASTLogarithm(ASTEuler(), self.base)
+          ASTLn(self.base)
         )
       )
     ).simplify()
+  
+  def is_constant(self):
+    return self.base.is_constant() and self.exponent.is_constant()
 
-# TODO: Extensive tests
 class ASTLogarithm(ASTNode):
   precidence = 0
   def __init__(self, base, argument):
@@ -615,9 +664,6 @@ class ASTLogarithm(ASTNode):
       
       return ASTNumber(math.log(argument.number, base.number))
     
-    # TODO: These should probably be behind a setting or explicit user request.
-    # TODO: These should also definitely be under "expand" instead of "reduce".
-    
     # log_b(b) = 1 if b != 1
     if base == argument and not base.is_exactly(1):
       # Handles ln(e) = 1
@@ -627,8 +673,8 @@ class ASTLogarithm(ASTNode):
       # log_b(a) = ln(a) / ln(b)
       if not base.is_constant():
         return ASTDivide(
-          ASTLogarithm(ASTEuler(), argument),
-          ASTLogarithm(ASTEuler(), base)
+          ASTLn(argument),
+          ASTLn(base)
         ).reduce(state)
       
       # log_b(a^c) = c * log_b(a)
@@ -663,9 +709,9 @@ class ASTLogarithm(ASTNode):
     
     return ASTLogarithm(base, argument)
 
-  def expand(self, state):
+  def distribute(self, original_state):
     # TODO
-    return ASTLogarithm(self.base.expand(state), self.argument.expand(state))
+    return ASTLogarithm(self.base.distribute(original_state), self.argument.distribute(original_state))
   
   def traverse(self, func):
     self.base.traverse(func)
@@ -683,11 +729,54 @@ class ASTLogarithm(ASTNode):
     return log(self.argument.eval(), self.base.eval())
   
   def derivative(self, var):
+    # There are a few simpler cases that we can take shortcuts
+    # in to avoid unnecessary calculations. These aren't technically
+    # necessary, but they speed up processing.
+
+    # If the base is a constant:
     # (log_b(f(x)))' = f'(x) / (f(x) * ln(b))
+    if self.base.is_constant():
+      return ASTDivide(
+        self.argument.derivative(var),
+        ASTMultiply(
+          self.argument,
+          ASTLn(self.base)
+        )
+      ).simplify()
+    
+    # If the argument is a constant:
+    # (log_[b(x)](C))' = (-ln(c) * b'(x)) / (b(x) * ln(b(x))^2)
+    if self.argument.is_constant():
+      return ASTDivide(
+        ASTMultiply(
+          ASTLn(self.argument),
+          self.base.derivative(var)
+        ).negate(),
+        ASTMultiply(
+          self.base,
+          ASTPower(ASTLn(self.base), ASTNumber(2))
+        )
+      ).simplify()
+    
+    # The general case:
+    # (log_[b(x)](f(x)))' = (ln(b(x)) * f'(x)/f(x) - ln(f(x)) * b'(x)/b(x)) / ln(b(x))^2
     return ASTDivide(
-      self.argument.derivative(var),
-      ASTMultiply(
-        self.argument,
-        ASTLogarithm(ASTEuler(), self.base)
-      )
+      ASTSubtract(
+        ASTMultiply(
+          ASTLn(self.base),
+          ASTDivide(self.argument.derivative(var), self.argument)
+        ),
+        ASTMultiply(
+          ASTLn(self.argument),
+          ASTDivide(self.base.derivative(var), self.base)
+        )
+      ),
+      ASTPower(ASTLn(self.base), ASTNumber(2))
     ).simplify()
+  
+  def is_constant(self):
+    return self.base.is_constant() and self.argument.is_constant()
+
+# Simple helper to avoid repetitive natural logarithm creation
+def ASTLn(argument):
+  return ASTLogarithm(ASTEuler(), argument)

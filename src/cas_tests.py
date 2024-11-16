@@ -7,6 +7,7 @@ cas_settings.USE_RATIONALS = True
 
 QUIET = False
 COLLAPSE_CATEGORIES = False
+TIME_TESTS = True
 
 # Some tests use test values, some use equality checking after loosely sorting the AST representation.
 # There may be a more robust way to do this, but this is good enough for now.
@@ -19,19 +20,31 @@ current_category = ""
 current_collapsed_category = None
 collapsed_category_tests = 0
 
+category_start_time = None
+
 def test_category(name):
-  global tests_in_category, current_category
+  global tests_in_category, current_category, category_start_time
   tests_in_category = 0
   current_category = name
   if not QUIET:
     print("\n" + name + ":")
+  if TIME_TESTS:
+    from time import time
+    category_start_time = time()
 def test_end_category():
-  global tests_in_category, current_category, current_collapsed_category
+  global tests_in_category, current_category, current_collapsed_category, category_start_time
   current_collapsed_category = None
+  if QUIET:
+    print("")
   print(
     " " + current_category + ": " + \
-    str(tests_in_category) + "/" + str(tests_in_category) + " passed!"
+    str(tests_in_category) + "/" + str(tests_in_category) + " passed!",
+    end=""
   )
+  if TIME_TESTS:
+    from time import time
+    print(" Time: " + str(round(time() - category_start_time, 2)) + "s", end="")
+  print("")
 
 def test_pass(name):
   global total_tests, tests_in_category, current_collapsed_category, collapsed_category_tests
@@ -75,21 +88,32 @@ def test_assert_equal(a, b, name):
   assert_equal(a, b, name)
   test_pass(name)
 
-test_values = [ ASTNumber(1), ASTNumber(0), ASTNumber(-1), ASTNumber(50), ASTNumber(36.2), ASTNumber(14.3), ASTNumber(8.9) ]
-def test_expression_numeric(expr, expected, name, test_vars=["x"], no_zero_input=False):
+# We keep test values in a relatively small range to avoid massive numbers for certain tests.
+# TODO: Overriding the test value list for particular test types?
+test_values = [ ASTNumber(1), ASTNumber(0), ASTNumber(-1), ASTNumber(2.1), ASTNumber(4.2), ASTNumber(3.3), ASTNumber(-2.9), ASTNumber(1.7) ]
+def test_expression_numeric(expr, expected, name, test_vars=["x"], filter_input=None):
+  skipped = 0
+  
   for value in test_values:
     expected_a = expr
     expected_b = expected
+    
     i = 0
+    stopped = False
+    
     for var in test_vars:
-      if no_zero_input and i == 0:
-        i += 0.1
-      
       num = ASTAdd(value, ASTNumber(i))
-
+      if filter_input != None and not filter_input(num.eval()):
+        stopped = True
+        break
+      
       expected_a = expected_a.substitute(var, num)
       expected_b = expected_b.substitute(var, num)
-      i += 3.3 # Random number
+      i += 1.3 # Random number
+    
+    if stopped:
+      skipped += 1
+      continue
 
     try:
       expected_a = expected_a.eval()
@@ -102,21 +126,13 @@ def test_expression_numeric(expr, expected, name, test_vars=["x"], no_zero_input
     
     assert_equal(expected_a, expected_b, name)
 
+  if skipped > len(test_values) / 2:
+    print("Test '" + name + "' failed by skipping too many values. This is probably a problem with the test.")
+    print("Skipped: " + str(skipped) + "/" + str(len(test_values)))
+    print("")
+    raise Exception("Test '" + name + "' failed")
+
   test_pass(name)
-
-def test_eval_equality(expr, expected, name):
-  a = parse_to_ast(expr).eval()
-  b = parse_to_ast(expected).eval()
-  assert_equal(a, b, name)
-  test_pass(name)
-
-# This doesn't test for proper simplification; only
-# equivalence after simplifying. It's good enough for now.
-def test_simplify_numeric(full, simplified, message, test_vars=["x"], no_zero_input=False):
-  test_expression_numeric(parse_to_ast(full).simplify(), parse_to_ast(simplified), message, test_vars, no_zero_input)
-
-def test_derivative_numeric(expr, var, expected, message):
-  test_expression_numeric(parse_to_ast(expr).derivative(var), parse_to_ast(expected), message, [var])
 
 def test_result_str(expr, expected, name, simplify=False, sort=False):
   a = parse_to_ast(expr) if isinstance(expr, str) else expr
@@ -127,7 +143,11 @@ def test_result_str(expr, expected, name, simplify=False, sort=False):
   assert_equal(a, b, name)
   test_pass(name)
 
-# Functions used to separate test categories
+
+
+# --------------------
+# Tests start here
+# --------------------
 
 def rational_tests():
   test_category("Rational tests")
@@ -200,7 +220,30 @@ def rational_tests():
   test_end_category()
 rational_tests()
 
+def is_constant_tests():
+  def test_is_constant(expr, expected, name):
+    a = parse_to_ast(expr).is_constant()
+    assert_equal(a, expected, name)
+    test_pass(name)
+    
+  test_category("Is constant tests")
+  test_is_constant("5", True, "Constant number")
+  test_is_constant("x", False, "Variable")
+  test_is_constant("x+5", False, "Addition")
+  test_is_constant("5*sin(3+4*(1/2))", True, "Function call")
+  test_is_constant("5*sin(3+4*(1/2)*x)", False, "Deeply nested variable")
+  test_is_constant("3*log_(2*x)(5*3+2^3)", False, "Logarithm base variable")
+  test_is_constant("3*ln(5*3+2^x)", False, "Logarithm argument and power variable")
+  test_end_category()
+is_constant_tests()
+
 def eval_tests():
+  def test_eval_equality(expr, expected, name):
+    a = parse_to_ast(expr).eval()
+    b = parse_to_ast(expected).eval()
+    assert_equal(a, b, name)
+    test_pass(name)
+  
   test_category("Eval parsing tests")
   # LOL we don't support decimals yet so here's our workaround
   test_eval_equality("pi", "3141592653589793/1000000000000000", "Pi")
@@ -223,6 +266,10 @@ def eval_tests():
 eval_tests()
 
 def simplify_equality_tests():
+  # This doesn't test for proper simplification; only equivalence after simplifying.
+  def test_simplify_numeric(full, simplified, message, test_vars=["x"], filter_input=None):
+    test_expression_numeric(parse_to_ast(full).simplify(), parse_to_ast(simplified), message, test_vars, filter_input)
+  
   test_category("Simplify numeric equality")
   test_simplify_numeric("(3*x)+(2*x)-(1*x+1*x)-(3*3*x)*x", "3*x*(−3*x + 1)", "Polynomial common factors")
   test_simplify_numeric("x*(x+1)", "x*(x+1)", "Retain common factors")
@@ -233,6 +280,10 @@ def simplify_equality_tests():
 simplify_equality_tests()
 
 def derivative_tests():
+  # This doesn't test for proper simplification; only equivalence after simplifying.
+  def test_derivative_numeric(expr, var, expected, message, filter_input=None):
+    test_expression_numeric(parse_to_ast(expr).derivative(var), parse_to_ast(expected), message, [var], filter_input)
+
   test_category("Derivative tests")
   test_derivative_numeric("x*x", "x", "2*x", "Simple product rule")
   test_derivative_numeric("x*x*x", "x", "3*x*x", "Product displaying power rule")
@@ -249,6 +300,17 @@ def derivative_tests():
     "csc(2*x + 1)*(3*sec(3*x + 1)*sec(3*x + 1) - 2*tan(3*x + 1)*cot(2*x + 1))",
     "Csc and tan derivatives / product, chain rule"
   )
+  
+  test_derivative_numeric("x^2", "x", "2*x", "Power rule")
+  test_derivative_numeric("x^3", "x", "3*x^2", "Power rule")
+  test_derivative_numeric("5*x^3 - 3*x^2 + 2*x - 4", "x", "15*x^2 - 6*x + 2", "Simple polynomial")
+  test_derivative_numeric("(2*x+3) ^ (3*x+1)", "x", "(2*x+3)^(3*x)*(6*x+(6*x+9)*ln(2*x+3)+2)", "Logarithmic differentiation", filter_input=lambda x: x < 5 and x > 0)
+  test_derivative_numeric("4^((1/2)*x)", "x", "2^x * ln(2)", "Exponential differentiation")
+  test_derivative_numeric("((1/3)*x + 1)^(x^2/2)", "x", "((x/3)+1)^(x^2/2) * (x^2/(2*x+6) + x*ln(x/3+1))", "Full exponential differentiation")
+  test_derivative_numeric("ln(5*x^2)", "x", "2/x", "Natural logarithm", filter_input=lambda x: x != 0)
+  test_derivative_numeric("log_(x)(2*x)", "x", "(ln(x) - ln(2*x))/(x*ln(x)^2)", "Logarithm non-constant base and exponent", filter_input=lambda x: x > 1)
+  test_derivative_numeric("log_(5+x)(x^3)", "x", "(3*ln(5+x)/x - ln(x^3)/(5+x)) / ln(5+x)^2", "Non-constant logarithm base", filter_input=lambda x: x > 1)
+  
   test_end_category()
 derivative_tests()
 
@@ -264,6 +326,7 @@ def readable_string_tests():
   
   test_result_str("x*x", "x*x", "Multiplication compaction")
   test_result_str("(15)*(x+1)", "15(x+1)", "Parentheses for precedence")
+  test_result_str("(2^3)*x", "2^3*x", "Multiplication operator insertion")
   test_result_str("(2*y)/(3*x*z)", "2y/(3x*z)", "Division precedence")
   test_result_str("(5)-(3+1)", "5-(3+1)", "Subtraction precedence")
   test_result_str("3*sin(2*x)", "3sin(2x)", "Function printing")
