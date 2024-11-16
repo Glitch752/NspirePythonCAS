@@ -24,12 +24,16 @@ class TokenType:
 token_names = {}
 token_chars = {}
 longest_token_char = 0
-def add_tok(type, name, char=None):
+def add_tok(type, name, chars=None):
   global longest_token_char
   token_names[type] = name
-  if char != None:
-    token_chars[char] = type
-    longest_token_char = max(longest_token_char, len(char))
+  if chars != None:
+    if isinstance(chars, str):
+      chars = [chars]
+    
+    for char in chars:
+      token_chars[char] = type
+      longest_token_char = max(longest_token_char, len(char))
 
 add_tok(TokenType.NUMBER, "Number")
 add_tok(TokenType.OPEN_PAREN, "OpenParen", "(")
@@ -40,7 +44,9 @@ add_tok(TokenType.DIVIDE, "Divide", "/")
 add_tok(TokenType.ADD, "Add", "+")
 add_tok(TokenType.SUBTRACT, "Subtract", "-")
 add_tok(TokenType.EXPONENT, "Exponent", "^")
-add_tok(TokenType.UNDERSCORE, "Underscore", "_")
+# ",," is an alternative to "_" because "_" is difficult
+# to type in prompt inputs on NSpire calculators.
+add_tok(TokenType.UNDERSCORE, "Underscore", ("_", ",,"))
 
 class Token:
   def __init__(self, type, literal):
@@ -231,7 +237,7 @@ class Tokens:
       # If not, expect parentheses and an argument
       base = None
       if self.p_peek().type == TokenType.NUMBER:
-        base = self.p_take().literal
+        base = ASTNumber(self.p_take().literal)
       else:
         self.p_take_expect(TokenType.OPEN_PAREN)
         base = self.p_expr()

@@ -262,13 +262,13 @@ def readable_string_tests():
   test_result_str("E+E", "e+e", "Euler's number")
   test_result_str("pi*2*pi", "2ππ", "Pi")
   
-  test_result_str("x*x", "xx", "Multiplication compaction")
+  test_result_str("x*x", "x*x", "Multiplication compaction")
   test_result_str("(15)*(x+1)", "15(x+1)", "Parentheses for precedence")
-  test_result_str("(2*y)/(3*x*z)", "2y/(3xz)", "Division precedence")
+  test_result_str("(2*y)/(3*x*z)", "2y/(3x*z)", "Division precedence")
   test_result_str("(5)-(3+1)", "5-(3+1)", "Subtraction precedence")
   test_result_str("3*sin(2*x)", "3sin(2x)", "Function printing")
   test_result_str("sin(r)*3", "3sin(r)", "Multiplication constant in front convention")
-  test_result_str("−1*x*x", "-xx", "Negative sign placement")
+  test_result_str("−1*x*x", "-x*x", "Negative sign placement")
   test_result_str(ASTLebiniz("v", "t", 1), "dv/dt", "Leibniz notation")
   test_result_str(ASTLebiniz("v", "t", 2), "d^2 v / dt^2", "Leibniz notation squared")
   test_result_str(
@@ -279,16 +279,23 @@ def readable_string_tests():
     ASTMultiply(ASTNumber(Rational(5, 3)), ASTVariable("x")),
     "(5/3)x", "Rational printing precedence parens"
   )
+  test_result_str("ln(5)", "ln(5)", "Natural logarithm notation")
+  test_result_str("log(5)", "log(5)", "Default base-10 logarithm notation")
+  test_result_str("log,,5(3)", "log_5(3)", "Alternative logarithm input notation")
+  test_result_str("log_(5)(5)", "log_5(5)", "Logarithm notation")
+  test_result_str("log_10(5)", "log(5)", "Logarithm base conversion")
+  test_result_str("10*log_(x+1)(5+x)", "10log_[x+1](5+x)", "Logarithm notation")
+  
   test_end_category()
 readable_string_tests()
 
 def exact_simplification_tests():
   test_category("Exact simplification tests")
   test_result_str("5*x*x + 10*x", "5(x+2)x", "Extract common factors", simplify=True, sort=True)
-  test_result_str("3*x*y + 2*x*y", "5xy", "Combine like terns", simplify=True, sort=True)
-  test_result_str("3 - 4 + x*x - 2*x + 4*x*x + 3*x", "5xx+x-1", "Simplify larger polynomial", simplify=True, sort=True)
+  test_result_str("3*x*y + 2*x*y", "5x*y", "Combine like terns", simplify=True, sort=True)
+  test_result_str("3 - 4 + x*x - 2*x + 4*x*x + 3*x", "5x*x+x-1", "Simplify larger polynomial", simplify=True, sort=True)
   test_result_str("sin(6/(2*x))", "sin(3/x)", "Simplify function arguments", simplify=True, sort=True)
-  test_result_str("3*x*x - 3*x - 9", "3(xx-3-x)", "GCD doesn't break on edge cases", simplify=True)
+  test_result_str("3*x*x - 3*x - 9", "3(x*x-3-x)", "GCD doesn't break on edge cases", simplify=True)
   
   test_result_str("log_(2/3)(3/2)", "-1", "Logarithm notation and simplification", simplify=True)
   test_result_str("log_(2*x+3)(2*x+3)", "1", "Logarithm simplification", simplify=True)
@@ -296,6 +303,7 @@ def exact_simplification_tests():
   test_result_str("log(100)", "2", "Logarithm default base 10", simplify=True)
   test_result_str("ln(E*E)", "2", "Natural logarithm", simplify=True)
   test_result_str("log_(pi)(pi)", "1", "Logarithm irrational base", simplify=True)
+  test_result_str("log_(2*x)(x)", "ln(x)/(ln(2)+ln(x))", "Logarithm simplification", simplify=True)
   
   # This is a probably-unnecessary number of tests for trig simplification.
   # Maybe we should add a "collapsed test group" feature to make them not take up so much space.

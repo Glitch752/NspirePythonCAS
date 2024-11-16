@@ -24,6 +24,7 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
 ## Future ideas
 - [ ] Add better error handling for the tokenizer and parser
 - [X] Add a better REPL that lets you pick operations instead of returning information about expressions
+  - Allow expressions in REPL evaluation mode inputs
 - [X] Make negative numbers in expressions more elegant; for example, we currently output stuff like `2+-3x` instead of `2-3x` and `-2+3x` instead of `3x-2`
 - [ ] Add more built-in functions
   - [X] All main trig functions: `tan`, `csc`, `sec`, `cot`
@@ -35,7 +36,10 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
 - [ ] Support decimals and other number representations in the parser
   - [ ] When parsing, decide between subtract and negative number so we don't need to use the `−` character
 - [ ] Improve simplification
-  - [ ] Add trig identities
+  - [ ] Add trig identities (e.g. `sin(x)^2 + cos(x)^2 = 1`, `tan(x) = sin(x)/cos(x)`)
+  - [ ] Improve term simplification with exponentiation
+    - [ ] e.g. `3x^2 / x -> 3x`
+    - [ ] e.g. `x * y * x^2 -> x^3 * y`
   - [X] Implement exact trig function simplification (e.g. `sin(pi/2) = 1`)
 - [ ] Refactor to store expressions and terms as lists of nodes instead of trees of 2-child nodes
   - This removes the requirement to use our current ExpressionReducer and TermReducer system, while also making parsing easier.

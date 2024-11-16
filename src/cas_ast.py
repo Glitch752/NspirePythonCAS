@@ -11,15 +11,16 @@ def to_float(obj):
     return obj.__float__()
 
 class SimplifyState:
-  def __init__(self, node=None, sort_terms=False):
+  def __init__(self, node=None, sort_terms=False, expand_logarithms=False):
     self.parent = node
     self.sort_terms = sort_terms
+    self.expand_logarithms = expand_logarithms
   def parent_is_expression(self):
     return self.parent != None and self.parent.is_expression()
   def parent_is_term(self):
     return self.parent != None and self.parent.is_term()
   def after(self, node):
-    return SimplifyState(node, self.sort_terms)
+    return SimplifyState(node, self.sort_terms, self.expand_logarithms)
   def reduce(self, node):
     return node.reduce(self)
   def expand(self, node):
@@ -53,8 +54,8 @@ class ASTNode:
     return ASTMultiply(ASTNumber(-1), self)
 
   # Don't override this; override reduce and expand instead
-  def simplify(self, sort_terms=False):
-    return self.expand(SimplifyState()).reduce(SimplifyState(sort_terms=sort_terms))
+  def simplify(self, sort_terms=False, expand_logarithms=True):
+    return self.expand(SimplifyState()).reduce(SimplifyState(sort_terms=sort_terms, expand_logarithms=expand_logarithms))
   def reduce(self, state):
     return self
   def expand(self, state):
@@ -349,11 +350,12 @@ class ASTMultiply(ASTNode):
     if left.is_exactly(-1):
       return "-" + right.pretty_str(ASTMultiply.precidence)
 
+    left_string = left.pretty_str(ASTMultiply.precidence)
     add_multiply = right.is_number() or (
         (isinstance(right, ASTMultiply) and right.left.is_number()) or \
         (isinstance(right, ASTDivide) and right.numerator.is_number())
-      )
-    string = left.pretty_str(ASTMultiply.precidence) + \
+      ) or "a" <= left_string[-1] <= "z"
+    string = left_string + \
       ("*" if add_multiply else "") + \
       right.pretty_str(ASTMultiply.precidence)
     if precidence < ASTMultiply.precidence:
@@ -564,8 +566,10 @@ class ASTLogarithm(ASTNode):
     self.argument = argument
   
   def pretty_str(self, precidence):
-    if self.base == ASTEuler():
+    if isinstance(self.base, ASTEuler):
       string = "ln"
+    elif self.base.is_exactly(10):
+      string = "log"
     else:
       string = "log_"
       if self.base.is_number():
@@ -573,14 +577,15 @@ class ASTLogarithm(ASTNode):
       else:
         # Maybe this should be a setting to adjust what parentheses are used?
         # I don't think it's a huge deal.
-        string += "[" + self.base.pretty_str(ASTLogarithm.precidence) + "]"
-    string += "(" + self.argument.pretty_str(ASTLogarithm.precidence) + ")"
+        string += "[" + self.base.pretty_str(100) + "]"
+    
+    string += "(" + self.argument.pretty_str(100) + ")"
     if precidence < ASTLogarithm.precidence:
       string = "(" + string + ")"
     return string
   
   def __str__(self):
-    return "log" + str(self.base) + "(" + str(self.argument) + ")"
+    return "log_[ " + str(self.base) + " ](" + str(self.argument) + ")"
   
   def reduce(self, original_state):
     state = original_state.after(self)
@@ -611,48 +616,50 @@ class ASTLogarithm(ASTNode):
       return ASTNumber(math.log(argument.number, base.number))
     
     # TODO: These should probably be behind a setting or explicit user request.
+    # TODO: These should also definitely be under "expand" instead of "reduce".
     
     # log_b(b) = 1 if b != 1
     if base == argument and not base.is_exactly(1):
       # Handles ln(e) = 1
       return ASTNumber(1)
     
-    # log_b(a) = ln(a) / ln(b)
-    if not base.is_constant():
-      return ASTDivide(
-        ASTLogarithm(ASTEuler(), argument),
-        ASTLogarithm(ASTEuler(), base)
-      ).reduce(state)
-    
-    # log_b(a^c) = c * log_b(a)
-    if isinstance(argument, ASTPower):
-      return ASTMultiply(
-        argument.exponent,
-        ASTLogarithm(base, argument.base)
-      ).reduce(state)
-    
-    # log_b(a * c) = log_b(a) + log_b(c)
-    if isinstance(argument, ASTMultiply):
-      # TODO: We should do this in a better way; this is hopefully temporary...
-      if argument.left.is_number() and isinstance(argument.left.number, Rational):
-        numerator = ASTMultiply(ASTNumber(argument.left.number.numerator), argument.right)
-        denominator = ASTNumber(argument.left.number.denominator)
-        return ASTSubtract(
-          ASTLogarithm(base, numerator),
-          ASTLogarithm(base, denominator)
-        )
+    if state.expand_logarithms:
+      # log_b(a) = ln(a) / ln(b)
+      if not base.is_constant():
+        return ASTDivide(
+          ASTLogarithm(ASTEuler(), argument),
+          ASTLogarithm(ASTEuler(), base)
+        ).reduce(state)
       
-      return ASTAdd(
-        ASTLogarithm(base, argument.left),
-        ASTLogarithm(base, argument.right)
-      ).reduce(state)
-    
-    # log_b(a / c) = log_b(a) - log_b(c)
-    if isinstance(argument, ASTDivide):
-      return ASTSubtract(
-        ASTLogarithm(base, argument.numerator),
-        ASTLogarithm(base, argument.denominator)
-      ).reduce(state)
+      # log_b(a^c) = c * log_b(a)
+      if isinstance(argument, ASTPower):
+        return ASTMultiply(
+          argument.exponent,
+          ASTLogarithm(base, argument.base)
+        ).reduce(state)
+      
+      # log_b(a * c) = log_b(a) + log_b(c)
+      if isinstance(argument, ASTMultiply):
+        # TODO: We should do this in a better way; this is hopefully temporary...
+        if argument.left.is_number() and isinstance(argument.left.number, Rational) and argument.left.number.denominator != 1:
+          numerator = ASTMultiply(ASTNumber(argument.left.number.numerator), argument.right)
+          denominator = ASTNumber(argument.left.number.denominator)
+          return ASTSubtract(
+            ASTLogarithm(base, numerator),
+            ASTLogarithm(base, denominator)
+          ).reduce(state)
+        
+        return ASTAdd(
+          ASTLogarithm(base, argument.left),
+          ASTLogarithm(base, argument.right)
+        ).reduce(state)
+      
+      # log_b(a / c) = log_b(a) - log_b(c)
+      if isinstance(argument, ASTDivide):
+        return ASTSubtract(
+          ASTLogarithm(base, argument.numerator),
+          ASTLogarithm(base, argument.denominator)
+        ).reduce(state)
     
     return ASTLogarithm(base, argument)
 

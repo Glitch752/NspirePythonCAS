@@ -90,7 +90,7 @@ class ExpressionReducer:
             term.numerator_terms.remove(factor)
       if len(com_den_factors) > 0:
         for factor in com_den_factors:
-          self.common_terms.extend(ASTDivide(ASTNumber(1), factor))
+          self.common_terms.append(ASTDivide(ASTNumber(1), factor))
         for term in self.terms:
           for factor in com_den_factors:
             term.denominator_terms.remove(factor)
