@@ -301,6 +301,8 @@ def derivative_tests():
     "Csc and tan derivatives / product, chain rule"
   )
   
+  # TODO: Tests for inverse trig functions
+  
   test_derivative_numeric("x^2", "x", "2*x", "Power rule")
   test_derivative_numeric("x^3", "x", "3*x^2", "Power rule")
   test_derivative_numeric("5*x^3 - 3*x^2 + 2*x - 4", "x", "15*x^2 - 6*x + 2", "Simple polynomial")
@@ -411,6 +413,8 @@ def exact_simplification_tests():
   test_result_str("cot(pi/2)", "0", "Trig simplification: cot(pi/2)=0", simplify=True)
   test_result_str("cot(pi/4)", "1", "Trig simplification: cot(pi/4)=1", simplify=True)
   test_result_str("cot(3*pi/4)", "-1", "Trig simplification: cot(3*pi/4)=-1", simplify=True)
+  
+  # TODO: Tests for inverse trig functions
   
   test_end_collapsed_category()
   

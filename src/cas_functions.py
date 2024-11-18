@@ -1,5 +1,5 @@
 from cas_ast import *
-from math import sin, cos, tan
+from math import sin, cos, tan, asin, acos, atan
 
 class ASTFunctionCall(ASTNode):
   name = "generic_function"
@@ -194,6 +194,147 @@ class FunctionCot(ASTFunctionCall):
       return ASTNumber(-1)
     return FunctionCot(arg)
 
+class FunctionArcSin(ASTFunctionCall):
+  name = "arcsin"
+  def eval(self):
+    return asin(self.argument.eval())
+  def derivative_f(self): # d/dx arcsin(x) = 1 / sqrt(1 - x^2) = (1 - x^2)^(-1/2)
+    return ASTPower(
+      ASTSubtract(
+        ASTNumber(1),
+        ASTPower(self.argument, ASTNumber(2))
+      ),
+      ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5)
+    )
+  def reduce(self, state):
+    arg = self.argument.reduce(state.after(self))
+    if arg.is_number() and (arg.number < -1 or arg.number > 1):
+      # TODO: This is undefined. We should return a special value for this
+      # and at least warn the user.
+      return ASTNumber(0)
+    if arg.is_exactly(0):
+      return ASTNumber(0)
+    if arg.is_exactly(1):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
+    if arg.is_exactly(-1):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5))
+    return FunctionArcSin(arg)
+
+class FunctionArcCos(ASTFunctionCall):
+  name = "arccos"
+  def eval(self):
+    return acos(self.argument.eval())
+  def derivative_f(self): # d/dx arccos(x) = -1 / sqrt(1 - x^2) = -(1 - x^2)^(-1/2)
+    return ASTPower(
+      ASTSubtract(
+        ASTNumber(1),
+        ASTPower(self.argument, ASTNumber(2))
+      ),
+      ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5)
+    ).negate()
+  def reduce(self, state):
+    arg = self.argument.reduce(state.after(self))
+    if arg.is_number() and (arg.number < -1 or arg.number > 1):
+      # TODO: This is undefined. We should return a special value for this
+      # and at least warn the user.
+      return ASTNumber(0)
+    if arg.is_exactly(0):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
+    if arg.is_exactly(1):
+      return ASTNumber(0)
+    if arg.is_exactly(-1):
+      return ASTPi()
+    return FunctionArcCos(arg)
+
+class FunctionArcTan(ASTFunctionCall):
+  name = "arctan"
+  def eval(self):
+    return atan(self.argument.eval())
+  def derivative_f(self): # d/dx arctan(x) = 1 / (1 + x^2) = (1 + x^2)^(-1)
+    return ASTPower(
+      ASTAdd(
+        ASTNumber(1),
+        ASTPower(self.argument, ASTNumber(2))
+      ),
+      ASTNumber(-1)
+    )
+  def reduce(self, state):
+    arg = self.argument.reduce(state.after(self))
+    if arg.is_exactly(0):
+      return ASTNumber(1)
+    if arg.is_exactly(1):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 4) if cas_settings.USE_RATIONALS else 0.25))
+    if arg.is_exactly(-1):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(-1, 4) if cas_settings.USE_RATIONALS else -0.25))
+    return FunctionArcTan(arg)
+
+class FunctionArcCsc(ASTFunctionCall):
+  name = "arccsc"
+  def eval(self):
+    return asin(1 / self.argument.eval())
+  def derivative_f(self): # d/dx arccsc(x) = -(1 - x^2)^(-0.5) / x^2
+    return ASTDivide(
+      ASTPower(
+        ASTSubtract(ASTNumber(1), ASTPower(self.argument, ASTNumber(2))),
+        ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5)
+      ),
+      ASTPower(self.argument, ASTNumber(2))
+    ).negate()
+  def reduce(self, state):
+    arg = self.argument.reduce(state.after(self))
+    if arg.is_number() and arg.number > -1 and arg.number < 1:
+      # TODO: This is undefined. We should return a special value for this
+      # and at least warn the user.
+      return ASTNumber(0)
+    if arg.is_exactly(1):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
+    if arg.is_exactly(-1):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5))
+    return FunctionArcCsc(arg)
+
+class FunctionArcSec(ASTFunctionCall):
+  name = "arcsec"
+  def eval(self):
+    return acos(1 / self.argument.eval())
+  def derivative_f(self): # d/dx arcsec(x) = (x^4 - x^2)^(-0.5)
+    return ASTPower(
+      ASTSubtract(
+        ASTPower(self.argument, ASTNumber(4)),
+        ASTPower(self.argument, ASTNumber(2))
+      ),
+      ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5)
+    )
+  def reduce(self, state):
+    arg = self.argument.reduce(state.after(self))
+    if arg.is_number() and arg.number > -1 and arg.number < 1:
+      # TODO: This is undefined. We should return a special value for this
+      # and at least warn the user.
+      return ASTNumber(0)
+    if arg.is_exactly(1):
+      return ASTNumber(0)
+    if arg.is_exactly(-1):
+      return ASTPi()
+    return FunctionArcSec(arg)
+
+class FunctionArcCot(ASTFunctionCall):
+  name = "arccot"
+  def eval(self):
+    return atan(1 / self.argument.eval())
+  def derivative_f(self): # d/dx arccot(x) = -(1 + x^2)^(-1)
+    return ASTPower(
+      ASTAdd(ASTNumber(1), ASTPower(self.argument, ASTNumber(2))),
+      ASTNumber(-1)
+    ).negate()
+  def reduce(self, state):
+    arg = self.argument.reduce(state.after(self))
+    if arg.is_exactly(0):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
+    if arg.is_exactly(1):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 4) if cas_settings.USE_RATIONALS else 0.25))
+    if arg.is_exactly(-1):
+      return ASTMultiply(ASTPi(), ASTNumber(Rational(3, 4) if cas_settings.USE_RATIONALS else 0.75))
+    return FunctionArcCot(arg)
+
 function_names = {
   "sin": FunctionSin,
   "cos": FunctionCos,
@@ -202,6 +343,19 @@ function_names = {
   "sec": FunctionSec,
   "cot": FunctionCot,
   
+  "arcsin": FunctionArcSin,
+  "arccos": FunctionArcCos,
+  "arctan": FunctionArcTan,
+  "arccsc": FunctionArcCsc,
+  "arcsec": FunctionArcSec,
+  "arccot": FunctionArcCot,
+  "asin": FunctionArcSin,
+  "acos": FunctionArcCos,
+  "atan": FunctionArcTan,
+  "acsc": FunctionArcCsc,
+  "asec": FunctionArcSec,
+  "acot": FunctionArcCot,
+  
   "sqrt": lambda arg: ASTPower(arg, ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5)),
   "cbrt": lambda arg: ASTPower(arg, ASTNumber(Rational(1, 3) if cas_settings.USE_RATIONALS else 1/3)),
   
@@ -209,6 +363,4 @@ function_names = {
   # but generic log functions are handled here.
   "log": lambda arg: ASTLogarithm(ASTNumber(10), arg),
   "ln": lambda arg: ASTLogarithm(ASTEuler(), arg),
-
-  # TODO: Inverse trigonometric functions
 }

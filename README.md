@@ -2,16 +2,12 @@
 
 A small Python program I've been developing on my TI-NSpire CX II calculator to replicate the abilities of the CAS software. It's a work in progress, and it will probably never get very good, but it can take derivatives and simplify expressions in some ways.
 
-It consists of a simple tokenizer, parser, and evaluator with support for arithmetic, variables, and built-in functions. For example, it can parse, evaluate, take the derivative of, and simplify something like `2*cos(5 + x*2) + 6*x*y`.
-
-The simplification is relatively basic; it supports constant folding, basic identities (e.g. `0*x = 0`, `1*x = x`, `x + 0 = x`, etc.), associative expression factoring (e.g. `2*x*y + 4*x*x*y` -> `2*x*y*(1 + 2*x)`), and some simple term rewriting (e.g. `x*y/x/x*y` -> `y*y/x`).
+It consists of a simple tokenizer, parser, and evaluator with support for arithmetic, variables, and built-in functions. For example, it can parse, evaluate, take the derivative of, and simplify something like `2*csc(5 + x^2) + log_(x+2)(6*x*y)`.
 
 It also optionally supports internally representing all operations as rationals to avoid floating-point errors and allow exact simplification in more cases.
 
 Most of the initial code was written on my calculator and exported to my computer, but I'm avoiding TI-specific Python modules to make it portable.
 Some parts, like most unit tests and some of the later code, were written on my computer and tested on my calculator to make things easier.
-
-The code isn't structured very well, but it's mostly me messing around, so I'm not super worried about making a robust codebase.
 
 # Running
 You don't need to have a TI-NSpire to run this code; it's regular Python.
@@ -28,11 +24,13 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
 - [X] Make negative numbers in expressions more elegant; for example, we currently output stuff like `2+-3x` instead of `2-3x` and `-2+3x` instead of `3x-2`
 - [ ] Add more built-in functions
   - [X] All main trig functions: `tan`, `csc`, `sec`, `cot`
-  - [ ] All main inverse trig functions: `asin`, `acos`, `atan`, `acsc`, `asec`, `acot`
+  - [X] All main inverse trig functions: `asin`, `acos`, `atan`, `acsc`, `asec`, `acot`
+  - [ ] Hyperbolic trig functions: `sinh`, `cosh`, `tanh`, `csch`, `sech`, `coth`
+  - [ ] Inverse hyperbolic trig functions: `asinh`, `acosh`, `atanh`, `acsch`, `asech`, `acoth`
 - [ ] Improve code for functions
   - [X] Refactor into separate file, maybe use classes and inheritance?
   - [ ] Add support for user-defined functions
-  - [ ] Add name aliases for functions (e.g. `arcsin` for `asin`)
+  - [X] Add name aliases for functions (e.g. `arcsin` for `asin`)
 - [ ] Support decimals and other number representations in the parser
   - [ ] When parsing, decide between subtract and negative number so we don't need to use the `−` character
 - [ ] Improve simplification

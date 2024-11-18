@@ -405,7 +405,6 @@ class ASTMultiply(ASTNode):
     from cas_simplify_expr import ExpressionTerm
     return ExpressionTerm(simplified_self, original_state).reduce().to_ast().reduce(state)
   def distribute(self, state):
-    # TODO
     return ASTMultiply(self.left.distribute(state), self.right.distribute(state))
   
   def traverse(self, func):
