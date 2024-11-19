@@ -94,24 +94,66 @@ class Tokens:
   
   def test_number(self):
     # TODO: More number formats including decimals
-    # TODO: Somehow decide between subtract and negative number so we don't need to use −
     # TODO: Proper rational number support
-    num = ""
-    negative_symbols = ["−"]
-    if self.str[self.idx] in negative_symbols:
-      num = "-"
-      self.idx += 1
-    while self.idx < len(self.str) and is_number(self.str[self.idx]):
-      num += self.str[self.idx]
-      self.idx += 1
-    if len(num) > 0:
-      number = int(num)
-      if cas_settings.USE_RATIONALS:
-        number = Rational(number)
-      self.list.append(Token(TokenType.NUMBER, number))
-      return True
+    numerator = 0
+    denominator = 1
+    negative = False
     
-    return False
+    negative_symbols = ["−"]
+    if len(self.list) == 0 or self.list[-1].type in [TokenType.OPEN_PAREN, TokenType.ADD, TokenType.SUBTRACT]:
+      negative_symbols.append("-")
+    
+    if self.str[self.idx] in negative_symbols:
+      negative = True
+      self.idx += 1
+    
+    char = self.str[self.idx]
+    if char == ".":
+      self.p_error("Number cannot start with a decimal separator")
+      return False
+    
+    if self.idx >= len(self.str) or not is_number(char):
+      if negative:
+        self.idx -= 1
+      return False
+    
+    seen_decimal_separator = False
+    while self.idx < len(self.str):
+      char = self.str[self.idx]
+      if char == ".":
+        if seen_decimal_separator:
+          break
+        
+        seen_decimal_separator = True
+        self.idx += 1
+        continue
+      
+      # We allow underscores in numbers for readability
+      if char == "_" and numerator > 0:
+        self.idx += 1
+        continue
+      
+      if not is_number(char):
+        break
+      
+      digit = int(char)
+      if seen_decimal_separator:
+        denominator *= 10
+        numerator = numerator * 10 + digit
+      else:
+        numerator = numerator * 10 + digit
+      
+      self.idx += 1
+    
+    if negative:
+      numerator = -numerator
+    
+    self.list.append(Token(
+      TokenType.NUMBER,
+      Rational(numerator, denominator) if cas_settings.USE_RATIONALS else (numerator / denominator)
+    ))
+    
+    return True
   
   def parse(self):
     self.list = []
@@ -120,9 +162,9 @@ class Tokens:
       
       if self.test_identifier():
         continue
-      if self.test_token_chars():
-        continue
       if self.test_number():
+        continue
+      if self.test_token_chars():
         continue
       
       if char == " ":

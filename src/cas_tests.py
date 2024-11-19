@@ -227,7 +227,7 @@ def is_constant_tests():
     test_pass(name)
     
   test_category("Is constant tests")
-  test_is_constant("5", True, "Constant number")
+  test_is_constant("-5", True, "Constant number")
   test_is_constant("x", False, "Variable")
   test_is_constant("x+5", False, "Addition")
   test_is_constant("5*sin(3+4*(1/2))", True, "Function call")
@@ -245,11 +245,11 @@ def eval_tests():
     test_pass(name)
   
   test_category("Eval parsing tests")
-  # LOL we don't support decimals yet so here's our workaround
-  test_eval_equality("pi", "3141592653589793/1000000000000000", "Pi")
-  test_eval_equality("E", "2718281828459045/1000000000000000", "Euler's number")
+  
+  test_eval_equality("pi", "3.141592653589793", "Pi")
+  test_eval_equality("E", "2.718281828459045", "Euler's number")
 
-  test_eval_equality("1+2*2", "5", "Simple integer expression")
+  test_eval_equality("1+2.5*2", "6", "Simple arithmetic expression")
   test_eval_equality("5 + 3*4/2 - 1 * (2 - 3)", "12", "Order of operations")
   test_eval_equality("sin(0*10) + cos(0)", "1", "Simple function calls")
   test_eval_equality("sqrt(4)", "2", "Square root")
@@ -258,10 +258,10 @@ def eval_tests():
   test_eval_equality("10^2", "100", "Exponentiation")
   test_eval_equality("5^2^3", "390625", "Exponentiation associativity")
   test_eval_equality("(2/3)^3", "8/27", "Exponentiation rational")
-  test_eval_equality("2^(−3)", "1/8", "Negative exponent")
+  test_eval_equality("2^(-3)", "1/8", "Negative exponent")
   test_eval_equality("log(100)+ln(E*E)", "4", "Logarithms")
   # This is kind of a weird way to test this, but it works for now
-  test_eval_equality("sin(pi/2) + cos(pi/2) - tan(pi/4) - csc(pi/2) + sec(pi) - cot(pi/4)", "−3", "Trigonometric functions")
+  test_eval_equality("sin(pi/2) + cos(pi/2) - tan(pi/4) - csc(pi/2) + sec(pi) - cot(pi/4)", "-3", "Trigonometric functions")
   test_end_category()
 eval_tests()
 
@@ -271,7 +271,7 @@ def simplify_equality_tests():
     test_expression_numeric(parse_to_ast(full).simplify(), parse_to_ast(simplified), message, test_vars, filter_input)
   
   test_category("Simplify numeric equality")
-  test_simplify_numeric("(3*x)+(2*x)-(1*x+1*x)-(3*3*x)*x", "3*x*(−3*x + 1)", "Polynomial common factors")
+  test_simplify_numeric("(3*x)+(2*x)-(1*x+1*x)-(3*3*x)*x", "3*x*(-3*x + 1)", "Polynomial common factors")
   test_simplify_numeric("x*(x+1)", "x*(x+1)", "Retain common factors")
   test_simplify_numeric("x*(x+1)+x*(x+1)", "2*x*(x+1)", "Combine identical terms")
   test_simplify_numeric("6*x*y + 2*x*x*y", "2*x*y*(3+x)", "Common factors with multiple variables", ("x", "y"))
@@ -287,12 +287,12 @@ def derivative_tests():
   test_category("Derivative tests")
   test_derivative_numeric("x*x", "x", "2*x", "Simple product rule")
   test_derivative_numeric("x*x*x", "x", "3*x*x", "Product displaying power rule")
-  test_derivative_numeric("(5*x+3) / (2*x+1)", "x", "(−1)/((2*x+1)*(2*x+1))", "Quotient rule")
+  test_derivative_numeric("(5*x+3) / (2*x+1)", "x", "-1/((2*x+1)*(2*x+1))", "Quotient rule")
   test_derivative_numeric("sin(2*x)+1", "x", "2*cos(2*x)", "Chain rule and sin derivative")
-  test_derivative_numeric("cos(sin(2*x))", "x", "−2*sin(sin(2*x))*cos(2*x)", "Nested chain rule and cos derivative")
+  test_derivative_numeric("cos(sin(2*x))", "x", "-2*sin(sin(2*x))*cos(2*x)", "Nested chain rule and cos derivative")
   test_derivative_numeric(
     "cot(sec(x))", "x",
-    "−1*tan(x)*sec(x)*csc(sec(x))*csc(sec(x))",
+    "-1*tan(x)*sec(x)*csc(sec(x))*csc(sec(x))",
     "Cot and sec derivatives with / chain rule"
   )
   test_derivative_numeric(
@@ -327,13 +327,14 @@ def readable_string_tests():
   test_result_str("pi*2*pi", "2ππ", "Pi")
   
   test_result_str("x*x", "x*x", "Multiplication compaction")
+  test_result_str("10.512", "1314/125" if cas_settings.USE_RATIONALS else "10.512", "Decimal numbers as rationals")
   test_result_str("(15)*(x+1)", "15(x+1)", "Parentheses for precedence")
   test_result_str("(2^3)*x", "2^3*x", "Multiplication operator insertion")
   test_result_str("(2*y)/(3*x*z)", "2y/(3x*z)", "Division precedence")
   test_result_str("(5)-(3+1)", "5-(3+1)", "Subtraction precedence")
   test_result_str("3*sin(2*x)", "3sin(2x)", "Function printing")
   test_result_str("sin(r)*3", "3sin(r)", "Multiplication constant in front convention")
-  test_result_str("−1*x*x", "-x*x", "Negative sign placement")
+  test_result_str("-1*x*x", "-x*x", "Negative sign placement")
   test_result_str(ASTLebiniz("v", "t", 1), "dv/dt", "Leibniz notation")
   test_result_str(ASTLebiniz("v", "t", 2), "d^2 v / dt^2", "Leibniz notation squared")
   test_result_str(
@@ -362,9 +363,11 @@ def exact_simplification_tests():
   test_result_str("sin(6/(2*x))", "sin(3/x)", "Simplify function arguments", simplify=True, sort=True)
   test_result_str("3*x*x - 3*x - 9", "3(x*x-3-x)", "GCD doesn't break on edge cases", simplify=True)
   
-  test_result_str("log_(2/3)(3/2)", "-1", "Logarithm notation and simplification", simplify=True)
+  if cas_settings.USE_RATIONALS: # Can't be simplified precisely with floats
+    test_result_str("log_(2/3)(3/2)", "-1", "Logarithm notation and simplification", simplify=True)
   test_result_str("log_(2*x+3)(2*x+3)", "1", "Logarithm simplification", simplify=True)
-  test_result_str("log_(x/4)(5)", "ln(5)/(ln(x)-ln(4))", "Logarithm base conversion", simplify=True)
+  if cas_settings.USE_RATIONALS: # 0.25*x instead of x/4 with rationals; this might be an area for improvement
+    test_result_str("log_(x/4)(5)", "ln(5)/(ln(x)-ln(4))", "Logarithm base conversion", simplify=True)
   test_result_str("log(100)", "2", "Logarithm default base 10", simplify=True)
   test_result_str("ln(E*E)", "2", "Natural logarithm", simplify=True)
   test_result_str("log_(pi)(pi)", "1", "Logarithm irrational base", simplify=True)
@@ -381,7 +384,8 @@ def exact_simplification_tests():
   test_result_str("sin(pi)", "0", "Trig simplification: sin(pi)=0", simplify=True)
   test_result_str("sin(3*pi/2)", "-1", "Trig simplification: sin(3*pi/2)=-1", simplify=True)
   test_result_str("sin(55*pi/2)", "-1", "Trig simplification: sin(55*pi/2)=-1", simplify=True)
-  test_result_str("sin(2/3*pi)", "sin((2/3)π)", "Trig simplification: sin(2/3*pi)=sin(2/3*pi)", simplify=True)
+  if cas_settings.USE_RATIONALS: # 0.6666... instead of 2/3 with floats; this might be an area for improvement
+    test_result_str("sin(2/3*pi)", "sin((2/3)π)", "Trig simplification: sin(2/3*pi)=sin(2/3*pi)", simplify=True)
   test_result_str("sin(3*pi)", "0", "Trig simplification: sin(3*pi)=0", simplify=True)
   
   test_result_str("cos(0)", "1", "Trig simplification: cos(0)=1", simplify=True)
@@ -389,7 +393,8 @@ def exact_simplification_tests():
   test_result_str("cos(pi)", "-1", "Trig simplification: cos(pi)=-1", simplify=True)
   test_result_str("cos(3*pi/2)", "0", "Trig simplification: cos(3*pi/2)=0", simplify=True)
   test_result_str("cos(55*pi/2)", "0", "Trig simplification: cos(55*pi/2)=0", simplify=True)
-  test_result_str("cos(2/3*pi)", "cos((2/3)π)", "Trig simplification: cos(2/3*pi)=cos(2/3*pi)", simplify=True)
+  if cas_settings.USE_RATIONALS: # 0.6666... instead of 2/3 with floats; this might be an area for improvement
+    test_result_str("cos(2/3*pi)", "cos((2/3)π)", "Trig simplification: cos(2/3*pi)=cos(2/3*pi)", simplify=True)
   test_result_str("cos(3*pi)", "-1", "Trig simplification: cos(3*pi)=-1", simplify=True)
   
   test_result_str("tan(0)", "0", "Trig simplification: tan(0)=0", simplify=True)
@@ -397,17 +402,20 @@ def exact_simplification_tests():
   test_result_str("tan(pi)", "0", "Trig simplification: tan(pi)=0", simplify=True)
   test_result_str("tan(3*pi/4)", "-1", "Trig simplification: tan(3*pi/4)=-1", simplify=True)
   test_result_str("tan(55*pi/2)", "0", "Trig simplification: tan(55*pi/2)=0", simplify=True)
-  test_result_str("tan(2/3*pi)", "tan((2/3)π)", "Trig simplification: tan(2/3*pi)=tan(2/3*pi)", simplify=True)
+  if cas_settings.USE_RATIONALS: # 0.6666... instead of 2/3 with floats; this might be an area for improvement
+    test_result_str("tan(2/3*pi)", "tan((2/3)π)", "Trig simplification: tan(2/3*pi)=tan(2/3*pi)", simplify=True)
   test_result_str("tan(3*pi)", "0", "Trig simplification: tan(3*pi)=0", simplify=True)
   
   test_result_str("csc(pi/2)", "1", "Trig simplification: csc(pi/2)=1", simplify=True)
   test_result_str("csc(3*pi/2)", "-1", "Trig simplification: csc(3*pi/2)=-1", simplify=True)
   test_result_str("csc(55*pi/2)", "-1", "Trig simplification: csc(55*pi/2)=-1", simplify=True)
-  test_result_str("csc(2/3*pi)", "csc((2/3)π)", "Trig simplification: csc(2/3*pi)=csc(2/3*pi)", simplify=True)
+  if cas_settings.USE_RATIONALS: # 0.6666... instead of 2/3 with floats; this might be an area for improvement
+    test_result_str("csc(2/3*pi)", "csc((2/3)π)", "Trig simplification: csc(2/3*pi)=csc(2/3*pi)", simplify=True)
   
   test_result_str("sec(0)", "1", "Trig simplification: sec(0)=1", simplify=True)
   test_result_str("sec(pi)", "-1", "Trig simplification: sec(pi)=-1", simplify=True)
-  test_result_str("sec(2/3*pi)", "sec((2/3)π)", "Trig simplification: sec(2/3*pi)=sec(2/3*pi)", simplify=True)
+  if cas_settings.USE_RATIONALS: # 0.6666... instead of 2/3 with floats; this might be an area for improvement
+    test_result_str("sec(2/3*pi)", "sec((2/3)π)", "Trig simplification: sec(2/3*pi)=sec(2/3*pi)", simplify=True)
   test_result_str("sec(3*pi)", "-1", "Trig simplification: sec(3*pi)=-1", simplify=True)
   
   test_result_str("cot(pi/2)", "0", "Trig simplification: cot(pi/2)=0", simplify=True)

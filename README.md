@@ -31,8 +31,8 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
   - [X] Refactor into separate file, maybe use classes and inheritance?
   - [ ] Add support for user-defined functions
   - [X] Add name aliases for functions (e.g. `arcsin` for `asin`)
-- [ ] Support decimals and other number representations in the parser
-  - [ ] When parsing, decide between subtract and negative number so we don't need to use the `−` character
+- [X] Support decimals and other number representations in the parser
+  - [X] When parsing, decide between subtract and negative number so we don't need to use the `−` character
 - [ ] Improve simplification
   - [ ] Add trig identities (e.g. `sin(x)^2 + cos(x)^2 = 1`, `tan(x) = sin(x)/cos(x)`)
   - [ ] Improve term simplification with exponentiation
