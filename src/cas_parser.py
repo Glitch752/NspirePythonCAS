@@ -8,6 +8,21 @@ def is_letter(c):
 def is_number(c):
   return "0" <= c <= "9"
 
+class ParseException(Exception):
+  def __init__(self, message, position, input, length=1):
+    self.message = message
+    self.length = length
+    self.position = position
+    self.input = input
+
+  def __str__(self):
+    start = max(0, self.position - 10)
+    end = min(len(self.input), self.position + 10)
+    
+    return "\nPARSER ERROR at input:" + str(self.position) + "\n" + \
+      ("... " if start != 0 else "") + self.input[start:end] + (" ..." if end != len(self.input) else "") + "\n" + \
+      ("    " if start != 0 else "") + " " * (self.position - start) + "^" * self.length + " " + self.message + "\n"
+
 class TokenType:
   NUMBER = 0
   OPEN_PAREN = 1
@@ -49,9 +64,11 @@ add_tok(TokenType.EXPONENT, "Exponent", "^")
 add_tok(TokenType.UNDERSCORE, "Underscore", ("_", ",,"))
 
 class Token:
-  def __init__(self, type, literal):
+  def __init__(self, type, literal, position):
     self.type = type
     self.literal = literal
+    self.position = position
+    self.length = len(str(literal))
   def __str__(self):
     string = token_names[self.type] + "("
     
@@ -76,7 +93,7 @@ class Tokens:
     for i in range(to_test, 0, -1):
       chars = self.str[self.idx : self.idx + i]
       if chars in token_chars:
-        self.list.append(Token(token_chars[chars], chars))
+        self.list.append(Token(token_chars[chars], chars, self.idx))
         self.idx += i
         return True
     return False
@@ -88,7 +105,7 @@ class Tokens:
       ident += self.str[self.idx]
       self.idx += 1
     if len(ident) > 0:
-      self.list.append(Token(TokenType.IDENTIFIER, ident))
+      self.list.append(Token(TokenType.IDENTIFIER, ident, self.idx - len(ident)))
       return True
     return False
   
@@ -102,6 +119,8 @@ class Tokens:
     negative_symbols = ["−"]
     if len(self.list) == 0 or self.list[-1].type in [TokenType.OPEN_PAREN, TokenType.ADD, TokenType.SUBTRACT]:
       negative_symbols.append("-")
+    
+    start_idx = self.idx
     
     if self.str[self.idx] in negative_symbols:
       negative = True
@@ -150,10 +169,14 @@ class Tokens:
     
     self.list.append(Token(
       TokenType.NUMBER,
-      Rational(numerator, denominator) if cas_settings.USE_RATIONALS else (numerator / denominator)
+      Rational(numerator, denominator) if cas_settings.USE_RATIONALS else (numerator / denominator),
+      start_idx
     ))
     
     return True
+  
+  def parse_error(self, message):
+    raise ParseException(message + " at position " + str(self.idx))
   
   def parse(self):
     self.list = []
@@ -171,13 +194,13 @@ class Tokens:
         self.idx += 1
         continue
       
-      # This is an unknown character
-      raise Exception("Unknown character: " + char)
+      raise ParseException("Unknown character", self.idx, self.str)
   
   def p_error(self, err):
-    # TODO: store token positions, better errors
-    print(err)
-    raise Exception(err)
+    if self.idx >= len(self.list):
+      raise ParseException(err, len(self.str), self.str, 1)
+    token = self.p_peek()
+    raise ParseException(err, token.position, self.str, token.length)
   
   def p_peek(self):
     if self.idx >= len(self.list):
@@ -214,7 +237,7 @@ class Tokens:
     self.idx = 0
     expression = self.p_expr()
     if self.idx < len(self.list):
-      self.p_error("Unexpected tokens at end of input: " + str(self.list[self.idx:]))
+      self.p_error("Unexpected \"" + self.p_peek().literal + "\" at end of input")
     return expression
   
   # Recursive descent parser grammar:

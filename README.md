@@ -18,7 +18,7 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
 `src/caslol.py` is just a file I use for testing.
 
 ## Future ideas
-- [ ] Add better error handling for the tokenizer and parser
+- [X] Add better error handling for the tokenizer and parser
 - [X] Add a better REPL that lets you pick operations instead of returning information about expressions
   - Allow expressions in REPL evaluation mode inputs
 - [X] Make negative numbers in expressions more elegant; for example, we currently output stuff like `2+-3x` instead of `2-3x` and `-2+3x` instead of `3x-2`

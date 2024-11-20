@@ -1,7 +1,17 @@
-from cas_parser import parse_to_ast
+from cas_parser import parse_to_ast, ParseException
 
-str = input("Expression: ")
-ast = parse_to_ast(str)
+def parse(str):
+  try:
+    return parse_to_ast(str)
+  except ParseException as e:
+    print("Error parsing expression")
+    print(e)
+    return None
+
+ast = None
+while ast == None:
+  str = input("Expression: ")
+  ast = parse(str)
 
 while True:
   print("\nCurrent expression: ", end="")
@@ -44,7 +54,9 @@ while True:
     print("\n*** Simplified: ", end="")
     print(simplified_ast.pretty_str(100))
   elif option == "4":
-    str = input("Expression: ")
-    ast = parse_to_ast(str)
+    ast = None
+    while ast == None:
+      str = input("Expression: ")
+      ast = parse(str)
   elif option == "5":
     break
