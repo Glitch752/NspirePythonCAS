@@ -15,38 +15,10 @@ def to_multiplication_chain(parts):
 
 # A class that simplifies a nested expression and its terms
 class ExpressionReducer:
-  def __init__(self, topmost_node, state):
+  def __init__(self, terms, state):
     self.common_terms = []
-    self.node = topmost_node
-    self.state = state.after(topmost_node)
-    self.terms = []
-    self.get_terms()
-  
-  def get_terms(self):
-    node = self.node
-    if not node.is_expression():
-      self.terms = [ExpressionTerm(node, self.state)]
-      return
-    
-    # (Subtracting, node)
-    nodes = [(False, node)]
-    add = []
-    subtract = []
-    while len(nodes) > 0:
-      n = nodes.pop()
-      adding = isinstance(n[1], ASTAdd)
-      if n[1].left.is_expression():
-        nodes.append((n[0], n[1].left))
-      else:
-        (subtract if n[0] else add).append(ExpressionTerm(n[1].left, self.state))
-      if n[1].right.is_expression():
-        nodes.append((n[0] ^ (not adding), n[1].right))
-      else:
-        (add if (n[0] ^ adding) else subtract).append(ExpressionTerm(n[1].right, self.state))
-    
-    self.terms = add
-    for term in subtract:
-      self.terms.append(term.negate())
+    self.state = state
+    self.terms = [ExpressionTerm(term, state) for term in terms]
   
   def reduce(self):
     # Remove 0 terms
@@ -58,9 +30,6 @@ class ExpressionReducer:
       i += 1
     
     if len(self.terms) > 1:
-      for i in range(len(self.terms)):
-        self.terms[i] = self.terms[i].reduce() # TODO: I don't think we technically need to reduce here
-      
       # Combine like terms
       # This is really inefficient, but it works.
       # TODO: use a hash table or something
@@ -103,7 +72,7 @@ class ExpressionReducer:
           break
         coefficients.append(abs(term.constant))
         all_negative &= term.constant < 0 
-        
+      
       if len(coefficients) > 0:
         hcf = gcd(coefficients) * (-1 if all_negative else 1)
 
@@ -130,15 +99,7 @@ class ExpressionReducer:
       terms = list(self.common_terms)
     
     if len(parts) > 0:
-      node = parts.pop(0).to_ast()
-      while len(parts) > 0:
-        part = parts.pop(0)
-        if part.constant >= 0:
-          node = ASTAdd(node, part.to_ast())
-        else:
-          node = ASTSubtract(node, part.negate().to_ast())
-      
-      terms.append(node)
+      terms.append(ASTSum([part.to_ast() for part in parts]))
     
     if len(terms) == 0:
       return ASTNumber(0)

@@ -253,9 +253,9 @@ class Tokens:
       op = self.p_take()
       right = self.p_term()
       if op.type == TokenType.ADD:
-        node = ASTAdd(node, right)
+        node = ASTSum(node, right)
       else:
-        node = ASTSubtract(node, right)
+        node = ASTSum.subtract(node, right)
     return node
 
   def p_term(self):

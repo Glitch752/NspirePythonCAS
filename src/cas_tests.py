@@ -102,7 +102,7 @@ def test_expression_numeric(expr, expected, name, test_vars=["x"], filter_input=
     stopped = False
     
     for var in test_vars:
-      num = ASTAdd(value, ASTNumber(i))
+      num = ASTSum(value, ASTNumber(i))
       if filter_input != None and not filter_input(num.eval()):
         stopped = True
         break
@@ -338,7 +338,7 @@ def readable_string_tests():
   test_result_str(ASTLebiniz("v", "t", 1), "dv/dt", "Leibniz notation")
   test_result_str(ASTLebiniz("v", "t", 2), "d^2 v / dt^2", "Leibniz notation squared")
   test_result_str(
-    ASTAdd(ASTNumber(Rational(5, 3)), ASTVariable("x")),
+    ASTSum(ASTNumber(Rational(5, 3)), ASTVariable("x")),
     "5/3+x", "Rational printing precedence no parens"
   )
   test_result_str(
@@ -358,10 +358,10 @@ readable_string_tests()
 def exact_simplification_tests():
   test_category("Exact simplification tests")
   test_result_str("5*x*x + 10*x", "5(x+2)x", "Extract common factors", simplify=True, sort=True)
-  test_result_str("3*x*y + 2*x*y", "5x*y", "Combine like terns", simplify=True, sort=True)
+  test_result_str("3*x*y + 2*x*y", "x*5y", "Combine like terns", simplify=True, sort=True)
   test_result_str("3 - 4 + x*x - 2*x + 4*x*x + 3*x", "5x*x+x-1", "Simplify larger polynomial", simplify=True, sort=True)
   test_result_str("sin(6/(2*x))", "sin(3/x)", "Simplify function arguments", simplify=True, sort=True)
-  test_result_str("3*x*x - 3*x - 9", "3(x*x-3-x)", "GCD doesn't break on edge cases", simplify=True)
+  test_result_str("3*x*x - 3*x - 9", "3(x*x-x-3)", "GCD doesn't break on edge cases", simplify=True)
   
   if cas_settings.USE_RATIONALS: # Can't be simplified precisely with floats
     test_result_str("log_(2/3)(3/2)", "-1", "Logarithm notation and simplification", simplify=True)

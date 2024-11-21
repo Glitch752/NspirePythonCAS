@@ -252,7 +252,7 @@ class FunctionArcTan(ASTFunctionCall):
     return atan(self.argument.eval())
   def derivative_f(self): # d/dx arctan(x) = 1 / (1 + x^2) = (1 + x^2)^(-1)
     return ASTPower(
-      ASTAdd(
+      ASTSum(
         ASTNumber(1),
         ASTPower(self.argument, ASTNumber(2))
       ),
@@ -322,7 +322,7 @@ class FunctionArcCot(ASTFunctionCall):
     return atan(1 / self.argument.eval())
   def derivative_f(self): # d/dx arccot(x) = -(1 + x^2)^(-1)
     return ASTPower(
-      ASTAdd(ASTNumber(1), ASTPower(self.argument, ASTNumber(2))),
+      ASTSum(ASTNumber(1), ASTPower(self.argument, ASTNumber(2))),
       ASTNumber(-1)
     ).negate()
   def reduce(self, state):
