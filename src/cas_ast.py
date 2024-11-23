@@ -49,7 +49,7 @@ class ASTNode:
     return self.__str__()
   
   def negate(self):
-    return ASTMultiply(ASTNumber(-1), self)
+    return ASTProduct(ASTNumber(-1), self)
 
   # Don't override this; override reduce and expand instead
   def simplify(self, sort_terms=False, expand_logarithms=True):
@@ -92,8 +92,10 @@ class ASTNode:
     if (self.is_exactly(0) and quarter_pi_offset == 0) or (isinstance(self, ASTPi) and quarter_pi_offset == 4):
       return True
     offset = Rational(quarter_pi_offset, 4) if cas_settings.USE_RATIONALS else quarter_pi_offset / 4
-    if isinstance(self, ASTMultiply) and self.left.is_number() and isinstance(self.right, ASTPi):
-      offset_coefficient = (self.left.number - offset) / 2
+    # This is even more hacky than it was before with the assumption of only 2 factors long...
+    # TODO: Fix this because it breaks under so many possible circumstances
+    if isinstance(self, ASTProduct) and self.factors[0].is_number() and isinstance(self.factors[1], ASTPi):
+      offset_coefficient = (self.factors[0].number - offset) / 2
       return offset_coefficient == int(offset_coefficient)
     return False
   def is_number(self):
@@ -102,8 +104,6 @@ class ASTNode:
     return isinstance(self, ASTNumber) and int(self.number) == self.number
   def is_exactly(self, num):
     return isinstance(self, ASTNumber) and self.number == num
-  def is_term(self):
-    return isinstance(self, (ASTMultiply, ASTDivide))
 
 class ASTConstant(ASTNode):
   def __init__(self):
@@ -216,7 +216,7 @@ class ASTLebiniz(ASTNode):
   def derivative(self, var):
     if self.main == var:
       return ASTLebiniz(self.main, self.relative_to, self.degree+1)
-    return ASTMultiply(
+    return ASTProduct(
       ASTLebiniz(self.main, var, 1),
       self
     ).simplify()
@@ -307,155 +307,116 @@ class ASTSum(ASTNode):
   def is_constant(self):
     return all(term.is_constant() for term in self.terms)
 
-class ASTMultiply(ASTNode):
+# Invariant: no factor in a product is a product
+class ASTProduct(ASTNode):
   precidence = 3
-  def __init__(self, left, right):
-    self.left = left
-    self.right = right
-  
-  def pretty_str(self, precidence):
-    left = self.left
-    right = self.right
-    if right.is_number() and not left.is_number():
-      (left, right) = (right, left)
-    if left.is_exactly(-1):
-      return "-" + right.pretty_str(ASTMultiply.precidence)
-
-    left_string = left.pretty_str(ASTMultiply.precidence)
-    # This is super hacky, but it works for now lol
-    add_multiply = not left_string[-1] == ")" and (
-        not left.is_number() and
-        not left.is_term() and
-        not (isinstance(left, ASTPi) or isinstance(left, ASTEuler))
-      ) or (
-        (isinstance(right, ASTMultiply) and right.left.is_number()) or \
-        (isinstance(right, ASTDivide) and right.numerator.is_number())
-      ) or "a" <= left_string[-1] <= "z"
-    string = left_string + \
-      ("*" if add_multiply else "") + \
-      right.pretty_str(ASTMultiply.precidence)
-    if precidence < ASTMultiply.precidence:
-      string = "(" + string + ")"
-    return string
-  def __str__(self):
-    return "(" + str(self.left) + "*" + str(self.right) + ")"
-  
-  def negate(self):
-    if self.left.is_number():
-      return ASTMultiply(self.left.negate(), self.right)
-    return ASTMultiply(ASTNumber(-1), self)
-  
-  def reduce(self, original_state):
-    state = original_state.after(self)
-
-    left = self.left.reduce(state)
-    right = self.right.reduce(state)
-    if left.is_exactly(0) or right.is_exactly(0):
-      return ASTNumber(0)
-    if right.is_exactly(1):
-      return left
-    if left.is_exactly(1):
-      return right
-    if left.is_number() and right.is_number():
-      return ASTNumber(left.number * right.number)
-    simplified_self = ASTMultiply(left, right)
-
-    if original_state.parent_is_term():
-      return simplified_self
-  
-    from cas_simplify_expr import ExpressionTerm
-    return ExpressionTerm(simplified_self, original_state).reduce().to_ast().reduce(state)
-  def distribute(self, state):
-    return ASTMultiply(self.left.distribute(state), self.right.distribute(state))
-  
-  def traverse(self, func):
-    self.left.traverse(func)
-    self.right.traverse(func)
-    func(self)
-  
-  def substitute(self, var, value):
-    return ASTMultiply(
-      self.left.substitute(var, value),
-      self.right.substitute(var, value)
-    )
-  def eval(self):
-    return self.left.eval() * self.right.eval()
-  def derivative(self, var):
-    return ASTSum(
-      ASTMultiply(self.left, self.right.derivative(var)),
-      ASTMultiply(self.right, self.left.derivative(var))
-    ).simplify()
-  
-  def is_constant(self):
-    return self.left.is_constant() and self.right.is_constant()
-
-class ASTDivide(ASTNode):
-  precidence = 3
-  def __init__(self, numerator, denominator):
-    self.numerator = numerator
-    self.denominator = denominator
-  
-  def pretty_str(self, precidence):
-    string = self.numerator.pretty_str(ASTDivide.precidence) + "/" + self.denominator.pretty_str(ASTDivide.precidence - 1)
-    if precidence < ASTDivide.precidence:
-      string = "(" + string + ")"
-    return string
-  def __str__(self):
-    return "(" + str(self.numerator) + "/" + str(self.denominator) + ")"
-  
-  def negate(self):
-    if self.numerator.is_number():
-      return ASTDivide(self.numerator.negate(), self.denominator)
-    return ASTMultiply(ASTNumber(-1), self)
-  
-  def reduce(self, original_state):
-    state = original_state.after(self)
+  def __init__(self, *factors):
+    if len(factors) == 1 and isinstance(factors[0], list):
+      self.factors = factors[0]
+    else:
+      self.factors = list(factors)
     
-    numerator = self.numerator.reduce(state)
-    denominator = self.denominator.reduce(state)
-    if numerator.is_exactly(0):
-      return ASTNumber(0)
-    if denominator.is_exactly(1):
-      return numerator
-    if numerator.is_number() and denominator.is_number():
-      return ASTNumber(numerator.number / denominator.number)
-    simplified_self = ASTDivide(numerator, denominator)
-
-    if original_state.parent_is_term():
-      return simplified_self
+    # Flatten products; this enforces our no product children invariant
+    i = 0
+    while i < len(self.factors):
+      if isinstance(self.factors[i], ASTProduct):
+        self.factors = self.factors[:i] + self.factors[i].factors + self.factors[i+1:]
+      else:
+        i += 1
   
+  @staticmethod
+  def divide(numerator, denominator):
+    return ASTProduct(numerator, ASTPower(denominator, ASTNumber(-1)))
+  
+  def pretty_str(self, precidence):
+    string = ""
+    for i, factor in enumerate(self.factors):
+      # TODO: Better handling of division
+      string += factor.pretty_str(ASTSum.precidence)
+      if i < len(self.factors) - 1:
+        string += "*"
+    
+    if precidence < ASTProduct.precidence:
+      string = "(" + string + ")"
+    return string
+  def __str__(self):
+    return "(" + "*".join(map(str, self.factors)) + ")"
+  
+  def reduce(self, original_state):
+    state = original_state.after(self)
+
+    new_factors = [factor.reduce(state) for factor in self.factors]
+    # Merge constantss
+    # TODO: Combine with ExpressionReducer and refactor; this is a hack to get tests working for now
+    constant = 1
+    i = 0
+    while i < len(new_factors):
+      if new_factors[i].is_number():
+        constant *= new_factors[i].number
+        new_factors.pop(i)
+      else:
+        i += 1
+    if constant == 0:
+      return ASTNumber(0)
+    if constant != 1:
+      new_factors.append(ASTNumber(constant))
+    
     from cas_simplify_expr import ExpressionTerm
-    return ExpressionTerm(simplified_self, original_state).reduce().to_ast().reduce(state)
+    reduced = ExpressionTerm(new_factors, state).reduce().to_ast()
+    
+    if not isinstance(reduced, ASTProduct):
+      return reduced.reduce(state)
+    if len(reduced.factors) == 0:
+      return ASTNumber(1)
+    if len(reduced.factors) == 1:
+      return reduced.factors[0]
+    
+    return reduced
+  
   def distribute(self, state):
-    # TODO
-    return ASTDivide(self.numerator.distribute(state), self.denominator.distribute(state))
+    return ASTProduct([factor.distribute(state) for factor in self.factors])
   
   def traverse(self, func):
-    self.numerator.traverse(func)
-    self.denominator.traverse(func)
+    for factor in self.factors:
+      factor.traverse(func)
     func(self)
   
   def substitute(self, var, value):
-    return ASTDivide(
-      self.numerator.substitute(var, value),
-      self.denominator.substitute(var, value)
-    )
+    return ASTProduct([factor.substitute(var, value) for factor in self.factors])
   def eval(self):
-    return self.numerator.eval() / self.denominator.eval()
-  
+    product = 1
+    for factor in self.factors:
+      product *= factor.eval()
+    return product
   def derivative(self, var):
-    return ASTDivide(
-      # ba' - ab'
-      ASTSum.subtract(
-        ASTMultiply(self.denominator, self.numerator.derivative(var)),
-        ASTMultiply(self.numerator, self.denominator.derivative(var))
-      ),
-      # ... / b**2
-      ASTMultiply(self.denominator, self.denominator)
-    ).simplify()
+    # First, move the constant factors out of the derivative
+    # Then, apply the product rule recursively
+    constantTerms = []
+    nonConstantFactors = []
+    for factor in self.factors:
+      if factor.is_constant():
+        constantTerms.append(factor)
+      else:
+        nonConstantFactors.append(factor)
+        
+    # If there are no non-constant factors, derivative is zero
+    if len(nonConstantFactors) == 0:
+      return ASTNumber(0)
+
+    # The generalized form of the product rule
+    # is the sum of derivatives of each factor times the product of the others
+    # e.g. (fgh)' = f'gh + fg'h + fgh'
+    sumTerms = []
+    for i, factor in enumerate(nonConstantFactors):
+      otherFactors = nonConstantFactors[:i] + nonConstantFactors[i+1:]
+      sumTerms.append(ASTProduct([factor.derivative(var)] + otherFactors))
+    
+    if len(constantTerms) > 0:
+      return ASTProduct(constantTerms + [ASTSum(sumTerms)]).simplify()
+    return ASTSum(sumTerms).simplify()
   
   def is_constant(self):
-    return self.numerator.is_constant() and self.denominator.is_constant()
+    return all(factor.is_constant() for factor in self.factors)
 
 class ASTPower(ASTNode):
   precidence = 2
@@ -530,35 +491,31 @@ class ASTPower(ASTNode):
     # Function to the power of a constant
     # f(x)^C = C * f(x)^(C-1) * f'(x)
     if self.exponent.is_constant():
-      return ASTMultiply(
-        ASTMultiply(
-          self.exponent,
-          ASTPower(self.base, ASTSum.subtract(self.exponent, ASTNumber(1))),
-        ),
+      return ASTProduct(
+        self.exponent,
+        ASTPower(self.base, ASTSum.subtract(self.exponent, ASTNumber(1))),
         self.base.derivative(var)
       ).simplify()
     
     # Constant to the power of a function
     # C^g(x) = C^g(x) * ln(C) * g'(x)
     if self.base.is_constant():
-      return ASTMultiply(
+      return ASTProduct(
         ASTPower(self.base, self.exponent),
-        ASTMultiply(
-          ASTLn(self.base),
-          self.exponent.derivative(var)
-        )
+        ASTLn(self.base),
+        self.exponent.derivative(var)
       ).simplify()
     
     # The general case:
     # (f(x)^g(x))' = f(x)^g(x) * (f'(x)/f(x) * g(x) + g'(x) * ln(f(x)))
-    return ASTMultiply(
+    return ASTProduct(
       self,
       ASTSum(
-        ASTMultiply(
-          ASTDivide(self.base.derivative(var), self.base),
+        ASTProduct(
+          ASTProduct.divide(self.base.derivative(var), self.base),
           self.exponent
         ),
-        ASTMultiply(
+        ASTProduct(
           self.exponent.derivative(var),
           ASTLn(self.base)
         )
@@ -632,39 +589,35 @@ class ASTLogarithm(ASTNode):
     if state.expand_logarithms:
       # log_b(a) = ln(a) / ln(b)
       if not base.is_constant():
-        return ASTDivide(
+        return ASTProduct.divide(
           ASTLn(argument),
           ASTLn(base)
         ).reduce(state)
       
       # log_b(a^c) = c * log_b(a)
       if isinstance(argument, ASTPower):
-        return ASTMultiply(
+        return ASTProduct(
           argument.exponent,
           ASTLogarithm(base, argument.base)
         ).reduce(state)
       
+      # Lol this is so bad
+      # TODO: Fix whatever this is lol
+      
       # log_b(a * c) = log_b(a) + log_b(c)
-      if isinstance(argument, ASTMultiply):
-        # TODO: We should do this in a better way; this is hopefully temporary...
-        if argument.left.is_number() and isinstance(argument.left.number, Rational) and argument.left.number.denominator != 1:
-          numerator = ASTMultiply(ASTNumber(argument.left.number.numerator), argument.right)
-          denominator = ASTNumber(argument.left.number.denominator)
+      if isinstance(argument, ASTProduct):
+        # TODO: This is really really bad code that breaks under a bunch of circumstances
+        if argument.factors[0].is_number() and isinstance(argument.factors[0].number, Rational) and argument.factors[0].number.denominator != 1:
+          numerator = ASTProduct.divide(ASTNumber(argument.factors[0].number.numerator), argument.factors[1])
+          denominator = ASTNumber(argument.factors[0].number.denominator)
           return ASTSum.subtract(
             ASTLogarithm(base, numerator),
             ASTLogarithm(base, denominator)
           ).reduce(state)
         
         return ASTSum(
-          ASTLogarithm(base, argument.left),
-          ASTLogarithm(base, argument.right)
-        ).reduce(state)
-      
-      # log_b(a / c) = log_b(a) - log_b(c)
-      if isinstance(argument, ASTDivide):
-        return ASTSum.subtract(
-          ASTLogarithm(base, argument.numerator),
-          ASTLogarithm(base, argument.denominator)
+          ASTLogarithm(base, argument.factors[0]),
+          ASTLogarithm(base, argument.factors[1])
         ).reduce(state)
     
     return ASTLogarithm(base, argument)
@@ -696,9 +649,9 @@ class ASTLogarithm(ASTNode):
     # If the base is a constant:
     # (log_b(f(x)))' = f'(x) / (f(x) * ln(b))
     if self.base.is_constant():
-      return ASTDivide(
+      return ASTProduct.divide(
         self.argument.derivative(var),
-        ASTMultiply(
+        ASTProduct(
           self.argument,
           ASTLn(self.base)
         )
@@ -707,12 +660,12 @@ class ASTLogarithm(ASTNode):
     # If the argument is a constant:
     # (log_[b(x)](C))' = (-ln(c) * b'(x)) / (b(x) * ln(b(x))^2)
     if self.argument.is_constant():
-      return ASTDivide(
-        ASTMultiply(
+      return ASTProduct.divide(
+        ASTProduct(
           ASTLn(self.argument),
           self.base.derivative(var)
         ).negate(),
-        ASTMultiply(
+        ASTProduct(
           self.base,
           ASTPower(ASTLn(self.base), ASTNumber(2))
         )
@@ -720,15 +673,15 @@ class ASTLogarithm(ASTNode):
     
     # The general case:
     # (log_[b(x)](f(x)))' = (ln(b(x)) * f'(x)/f(x) - ln(f(x)) * b'(x)/b(x)) / ln(b(x))^2
-    return ASTDivide(
+    return ASTProduct.divide(
       ASTSum.subtract(
-        ASTMultiply(
+        ASTProduct(
           ASTLn(self.base),
-          ASTDivide(self.argument.derivative(var), self.argument)
+          ASTProduct.divide(self.argument.derivative(var), self.argument)
         ),
-        ASTMultiply(
+        ASTProduct(
           ASTLn(self.argument),
-          ASTDivide(self.base.derivative(var), self.base)
+          ASTProduct.divide(self.base.derivative(var), self.base)
         )
       ),
       ASTPower(ASTLn(self.base), ASTNumber(2))

@@ -45,6 +45,7 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
   - [X] Add support for logarithms
 - [ ] Represent undefined values instead of simplifying to 0 in many cases (e.g. `csc(pi)=0` in our current implementation)
 - [X] Internally represent numbers as rationals to avoid floating-point errors and allow exact simplification in more cases
+  - [ ] Don't represent integers as rationals when possible for performance
 - [X] Add support for symbolic constants like `pi`, `e`, etc. (probably regular variables with special names?)
 - [X] Add support for non-primary variables of differentiation so we can take partial derivatives
 - [ ] Store and calculate function domains and ranges

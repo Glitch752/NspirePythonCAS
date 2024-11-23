@@ -39,7 +39,7 @@ class ASTFunctionCall(ASTNode):
   def derivative_f(self):
     raise Exception("Derivative for function " + self.name + " is not implemented.")
   def derivative(self, var):
-    return ASTMultiply(
+    return ASTProduct(
       self.derivative_f(),
       self.argument.derivative(var)
     ).simplify()
@@ -71,7 +71,7 @@ class FunctionCos(ASTFunctionCall):
   def eval(self):
     return cos(self.argument.eval())
   def derivative_f(self): # d/dx cos(x) = -sin(x)
-    return ASTMultiply(ASTNumber(-1), FunctionSin(self.argument))
+    return ASTProduct(ASTNumber(-1), FunctionSin(self.argument))
   def reduce(self, state):
     arg = self.argument.reduce(state.after(self))
     if arg.is_2pi_multiple(0):
@@ -89,7 +89,7 @@ class FunctionTan(ASTFunctionCall):
   def eval(self):
     return tan(self.argument.eval())
   def derivative_f(self): # d/dx tan(x) = sec(x)^2
-    return ASTMultiply(FunctionSec(self.argument), FunctionSec(self.argument))
+    return ASTProduct(FunctionSec(self.argument), FunctionSec(self.argument))
   def reduce(self, state):
     arg = self.argument.reduce(state.after(self))
     if arg.is_2pi_multiple(0):
@@ -119,9 +119,10 @@ class FunctionCsc(ASTFunctionCall):
   def eval(self):
     return 1 / sin(self.argument.eval())
   def derivative_f(self): # d/dx csc(x) = -csc(x)*cot(x)
-    return ASTMultiply(
+    return ASTProduct(
       ASTNumber(-1),
-      ASTMultiply(FunctionCsc(self.argument), FunctionCot(self.argument))
+      FunctionCsc(self.argument),
+      FunctionCot(self.argument)
     )
   def reduce(self, state):
     arg = self.argument.reduce(state.after(self))
@@ -144,7 +145,7 @@ class FunctionSec(ASTFunctionCall):
   def eval(self):
     return 1 / cos(self.argument.eval())
   def derivative_f(self): # d/dx sec(x) = sec(x)*tan(x)
-    return ASTMultiply(FunctionSec(self.argument), FunctionTan(self.argument))
+    return ASTProduct(FunctionSec(self.argument), FunctionTan(self.argument))
   def reduce(self, state):
     arg = self.argument.reduce(state.after(self))
     if arg.is_2pi_multiple(0):
@@ -166,9 +167,10 @@ class FunctionCot(ASTFunctionCall):
   def eval(self):
     return 1 / tan(self.argument.eval())
   def derivative_f(self): # d/dx cot(x) = -csc(x)^2
-    return ASTMultiply(
+    return ASTProduct(
       ASTNumber(-1),
-      ASTMultiply(FunctionCsc(self.argument), FunctionCsc(self.argument))
+      FunctionCsc(self.argument),
+      FunctionCsc(self.argument)
     )
   def reduce(self, state):
     arg = self.argument.reduce(state.after(self))
@@ -200,7 +202,7 @@ class FunctionArcSin(ASTFunctionCall):
     return asin(self.argument.eval())
   def derivative_f(self): # d/dx arcsin(x) = 1 / sqrt(1 - x^2) = (1 - x^2)^(-1/2)
     return ASTPower(
-      ASTSubtract(
+      ASTSum.subtract(
         ASTNumber(1),
         ASTPower(self.argument, ASTNumber(2))
       ),
@@ -215,9 +217,9 @@ class FunctionArcSin(ASTFunctionCall):
     if arg.is_exactly(0):
       return ASTNumber(0)
     if arg.is_exactly(1):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
     if arg.is_exactly(-1):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5))
     return FunctionArcSin(arg)
 
 class FunctionArcCos(ASTFunctionCall):
@@ -226,7 +228,7 @@ class FunctionArcCos(ASTFunctionCall):
     return acos(self.argument.eval())
   def derivative_f(self): # d/dx arccos(x) = -1 / sqrt(1 - x^2) = -(1 - x^2)^(-1/2)
     return ASTPower(
-      ASTSubtract(
+      ASTSum.subtract(
         ASTNumber(1),
         ASTPower(self.argument, ASTNumber(2))
       ),
@@ -239,7 +241,7 @@ class FunctionArcCos(ASTFunctionCall):
       # and at least warn the user.
       return ASTNumber(0)
     if arg.is_exactly(0):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
     if arg.is_exactly(1):
       return ASTNumber(0)
     if arg.is_exactly(-1):
@@ -263,9 +265,9 @@ class FunctionArcTan(ASTFunctionCall):
     if arg.is_exactly(0):
       return ASTNumber(1)
     if arg.is_exactly(1):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 4) if cas_settings.USE_RATIONALS else 0.25))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(1, 4) if cas_settings.USE_RATIONALS else 0.25))
     if arg.is_exactly(-1):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(-1, 4) if cas_settings.USE_RATIONALS else -0.25))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(-1, 4) if cas_settings.USE_RATIONALS else -0.25))
     return FunctionArcTan(arg)
 
 class FunctionArcCsc(ASTFunctionCall):
@@ -273,9 +275,9 @@ class FunctionArcCsc(ASTFunctionCall):
   def eval(self):
     return asin(1 / self.argument.eval())
   def derivative_f(self): # d/dx arccsc(x) = -(1 - x^2)^(-0.5) / x^2
-    return ASTDivide(
+    return ASTProduct.divide(
       ASTPower(
-        ASTSubtract(ASTNumber(1), ASTPower(self.argument, ASTNumber(2))),
+        ASTSum.subtract(ASTNumber(1), ASTPower(self.argument, ASTNumber(2))),
         ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5)
       ),
       ASTPower(self.argument, ASTNumber(2))
@@ -287,9 +289,9 @@ class FunctionArcCsc(ASTFunctionCall):
       # and at least warn the user.
       return ASTNumber(0)
     if arg.is_exactly(1):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
     if arg.is_exactly(-1):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(-1, 2) if cas_settings.USE_RATIONALS else -0.5))
     return FunctionArcCsc(arg)
 
 class FunctionArcSec(ASTFunctionCall):
@@ -298,7 +300,7 @@ class FunctionArcSec(ASTFunctionCall):
     return acos(1 / self.argument.eval())
   def derivative_f(self): # d/dx arcsec(x) = (x^4 - x^2)^(-0.5)
     return ASTPower(
-      ASTSubtract(
+      ASTSum.subtract(
         ASTPower(self.argument, ASTNumber(4)),
         ASTPower(self.argument, ASTNumber(2))
       ),
@@ -328,11 +330,11 @@ class FunctionArcCot(ASTFunctionCall):
   def reduce(self, state):
     arg = self.argument.reduce(state.after(self))
     if arg.is_exactly(0):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(1, 2) if cas_settings.USE_RATIONALS else 0.5))
     if arg.is_exactly(1):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(1, 4) if cas_settings.USE_RATIONALS else 0.25))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(1, 4) if cas_settings.USE_RATIONALS else 0.25))
     if arg.is_exactly(-1):
-      return ASTMultiply(ASTPi(), ASTNumber(Rational(3, 4) if cas_settings.USE_RATIONALS else 0.75))
+      return ASTProduct(ASTPi(), ASTNumber(Rational(3, 4) if cas_settings.USE_RATIONALS else 0.75))
     return FunctionArcCot(arg)
 
 function_names = {

@@ -8,11 +8,13 @@ cas_settings.USE_RATIONALS = True
 QUIET = False
 COLLAPSE_CATEGORIES = False
 TIME_TESTS = True
+ERROR_ON_FAIL = False
 
 # Some tests use test values, some use equality checking after loosely sorting the AST representation.
 # There may be a more robust way to do this, but this is good enough for now.
 
 total_tests = 0
+passed_tests = 0
 
 tests_in_category = 0
 current_category = ""
@@ -47,8 +49,10 @@ def test_end_category():
   print("")
 
 def test_pass(name):
-  global total_tests, tests_in_category, current_collapsed_category, collapsed_category_tests
+  global total_tests, passed_tests, tests_in_category, current_collapsed_category, collapsed_category_tests
   total_tests += 1
+  passed_tests += 1
+  
   tests_in_category += 1
   if current_collapsed_category != None:
     collapsed_category_tests += 1
@@ -57,6 +61,12 @@ def test_pass(name):
     print(".", end="")
   else:
     print("  Test '" + name + "' passed!")
+
+def test_fail(name):
+  global total_tests,tests_in_category
+  total_tests += 1
+  tests_in_category += 1
+  # TODO: Many messages don't even account for failed tests lol
 
 def test_collapsed_category(name):
   global current_collapsed_category, collapsed_category_tests
@@ -85,63 +95,80 @@ def assert_equal(a, b, name):
     raise Exception("Test '" + name + "' failed: " + str(a) + " != " + str(b))
 
 def test_assert_equal(a, b, name):
-  assert_equal(a, b, name)
-  test_pass(name)
+  try:
+    assert_equal(a, b, name)
+    test_pass(name)
+  except Exception as e:
+    test_fail(name)
+    if ERROR_ON_FAIL:
+      raise e
 
 # We keep test values in a relatively small range to avoid massive numbers for certain tests.
 # TODO: Overriding the test value list for particular test types?
 test_values = [ ASTNumber(1), ASTNumber(0), ASTNumber(-1), ASTNumber(2.1), ASTNumber(4.2), ASTNumber(3.3), ASTNumber(-2.9), ASTNumber(1.7) ]
 def test_expression_numeric(expr, expected, name, test_vars=["x"], filter_input=None):
-  skipped = 0
-  
-  for value in test_values:
-    expected_a = expr
-    expected_b = expected
+  try:
+    skipped = 0
     
-    i = 0
-    stopped = False
-    
-    for var in test_vars:
-      num = ASTSum(value, ASTNumber(i))
-      if filter_input != None and not filter_input(num.eval()):
-        stopped = True
-        break
+    for value in test_values:
+      expected_a = expr
+      expected_b = expected
       
-      expected_a = expected_a.substitute(var, num)
-      expected_b = expected_b.substitute(var, num)
-      i += 1.3 # Random number
-    
-    if stopped:
-      skipped += 1
-      continue
+      i = 0
+      stopped = False
+      
+      for var in test_vars:
+        num = ASTSum(value, ASTNumber(i))
+        if filter_input != None and not filter_input(num.eval()):
+          stopped = True
+          break
+        
+        expected_a = expected_a.substitute(var, num)
+        expected_b = expected_b.substitute(var, num)
+        i += 1.3 # Random number
+      
+      if stopped:
+        skipped += 1
+        continue
 
-    try:
-      expected_a = expected_a.eval()
-      expected_b = expected_b.eval()
-    except Exception as e:
-      print("\nError: " + str(e))
-      print("Test '" + name + "' failed by erroring. This definitely shouldn't happen... did you forget to add a test variable?")
+      try:
+        expected_a = expected_a.eval()
+        expected_b = expected_b.eval()
+      except Exception as e:
+        print("\nError: " + str(e))
+        print("Test '" + name + "' failed by erroring. This definitely shouldn't happen... did you forget to add a test variable?")
+        print("")
+        raise Exception("Test '" + name + "' failed")
+      
+      assert_equal(expected_a, expected_b, name)
+
+    if skipped > len(test_values) / 2:
+      print("Test '" + name + "' failed by skipping too many values. This is probably a problem with the test.")
+      print("Skipped: " + str(skipped) + "/" + str(len(test_values)))
       print("")
       raise Exception("Test '" + name + "' failed")
-    
-    assert_equal(expected_a, expected_b, name)
 
-  if skipped > len(test_values) / 2:
-    print("Test '" + name + "' failed by skipping too many values. This is probably a problem with the test.")
-    print("Skipped: " + str(skipped) + "/" + str(len(test_values)))
-    print("")
-    raise Exception("Test '" + name + "' failed")
-
-  test_pass(name)
+    test_pass(name)
+  
+  except Exception as e:
+    test_fail(name)
+    if ERROR_ON_FAIL:
+      raise e
 
 def test_result_str(expr, expected, name, simplify=False, sort=False):
-  a = parse_to_ast(expr) if isinstance(expr, str) else expr
-  if simplify or sort:
-    a = a.simplify(sort)
-  a = a.pretty_str(100)
-  b = expected
-  assert_equal(a, b, name)
-  test_pass(name)
+  try:
+    a = parse_to_ast(expr) if isinstance(expr, str) else expr
+    if simplify or sort:
+      a = a.simplify(sort)
+    a = a.pretty_str(100)
+    b = expected
+    assert_equal(a, b, name)
+    test_pass(name)
+  
+  except Exception as e:
+    test_fail(name)
+    if ERROR_ON_FAIL:
+      raise e
 
 
 
@@ -222,9 +249,14 @@ rational_tests()
 
 def is_constant_tests():
   def test_is_constant(expr, expected, name):
-    a = parse_to_ast(expr).is_constant()
-    assert_equal(a, expected, name)
-    test_pass(name)
+    try:
+      a = parse_to_ast(expr).is_constant()
+      assert_equal(a, expected, name)
+      test_pass(name)
+    except Exception as e:
+      test_fail(name)
+      if ERROR_ON_FAIL:
+        raise e
     
   test_category("Is constant tests")
   test_is_constant("-5", True, "Constant number")
@@ -239,10 +271,15 @@ is_constant_tests()
 
 def eval_tests():
   def test_eval_equality(expr, expected, name):
-    a = parse_to_ast(expr).eval()
-    b = parse_to_ast(expected).eval()
-    assert_equal(a, b, name)
-    test_pass(name)
+    try:
+      a = parse_to_ast(expr).eval()
+      b = parse_to_ast(expected).eval()
+      assert_equal(a, b, name)
+      test_pass(name)
+    except Exception as e:
+      test_fail(name)
+      if ERROR_ON_FAIL:
+        raise e
   
   test_category("Eval parsing tests")
   
@@ -342,7 +379,7 @@ def readable_string_tests():
     "5/3+x", "Rational printing precedence no parens"
   )
   test_result_str(
-    ASTMultiply(ASTNumber(Rational(5, 3)), ASTVariable("x")),
+    ASTProduct(ASTNumber(Rational(5, 3)), ASTVariable("x")),
     "(5/3)x", "Rational printing precedence parens"
   )
   test_result_str("ln(5)", "ln(5)", "Natural logarithm notation")
@@ -429,4 +466,7 @@ def exact_simplification_tests():
   test_end_category()
 exact_simplification_tests()
 
-print("\nAll " + str(total_tests) + " tests passed!")
+if passed_tests == total_tests:
+  print("\nAll " + str(total_tests) + " tests passed!")
+else:
+  print("\nOnly " + str(passed_tests) + " out of " + str(total_tests) + " tests passed.")

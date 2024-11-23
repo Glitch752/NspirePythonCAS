@@ -230,8 +230,11 @@ class Rational:
     if not isinstance(other, Rational):
       other = Rational(other)
     if other.denominator == 1:
-      return Rational(self.numerator ** other.numerator, self.denominator ** other.numerator)
-    # TODO: Do something similar to our exact_rational_log function for exact rational powers.
+      power = other.numerator
+      if power >= 0:
+        return Rational(self.numerator ** power, self.denominator ** power)
+      else: # Negative power
+        return Rational(self.denominator ** abs(power), self.numerator ** abs(power))
     return None
 
   def __float__(self):

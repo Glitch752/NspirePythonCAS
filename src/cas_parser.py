@@ -264,9 +264,9 @@ class Tokens:
       op = self.p_take()
       right = self.p_power()
       if op.type == TokenType.MULTIPLY:
-        node = ASTMultiply(node, right)
+        node = ASTProduct(node, right)
       else:
-        node = ASTDivide(node, right)
+        node = ASTProduct.divide(node, right)
     return node
 
   # Right-associative
