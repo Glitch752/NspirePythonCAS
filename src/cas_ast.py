@@ -1,6 +1,11 @@
 import cas_settings
 from cas_rational import Rational
 
+def is_number(c):
+  return "0" <= c <= "9"
+def is_letter(c):
+  return "a" <= c <= "z" or "A" <= c <= "Z"
+
 # Micropython's float implementation unfortunately
 # doesn't fall back to the __float__ magic method.
 # This is a workaround for that.
@@ -46,6 +51,8 @@ class ASTNode:
   def __str__(self):
     raise Exception("Implement me!")
   def __repr__(self):
+    return self.__str__()
+  def sort_str(self):
     return self.__str__()
   
   def negate(self):
@@ -330,11 +337,47 @@ class ASTProduct(ASTNode):
   
   def pretty_str(self, precidence):
     string = ""
-    for i, factor in enumerate(self.factors):
-      # TODO: Better handling of division
-      string += factor.pretty_str(ASTSum.precidence)
-      if i < len(self.factors) - 1:
+    number_factors = []
+    numerator_factors = []
+    denominator_factors = []
+    for factor in self.factors:
+      if factor.is_number():
+        number_factors.append(factor)
+      elif isinstance(factor, ASTPower) and factor.exponent.is_exactly(-1):
+        denominator_factors.append(factor.base)
+      else:
+        numerator_factors.append(factor)
+    
+    # This _should_ be reduced most of the time,
+    # but we still handle cases where there are multiple numberical constant factors
+    for i, factor in enumerate(number_factors):
+      if i == 0 and factor.is_exactly(-1):
+        string += "-"
+      else:
+        string += factor.pretty_str(ASTProduct.precidence)
+        if i < len(number_factors) - 1 or len(numerator_factors) > 0 and string[-1] != ")":
+          string += "*"
+    
+    for i, factor in enumerate(numerator_factors):
+      formatted_string = factor.pretty_str(ASTProduct.precidence)
+      if len(string) > 1 and len(formatted_string) > 0 and string[-1] == "*"\
+        and (not is_letter(formatted_string[0]) or is_number(string[-2])):
+        string = string[:-1]
+      string += formatted_string
+      if i < len(numerator_factors) - 1\
+        and string[-1] != ")":
         string += "*"
+    if len(denominator_factors) > 0:
+      string += "/"
+      use_parentheses = len(denominator_factors) > 1 or isinstance(denominator_factors[0], ASTProduct)
+      if use_parentheses:
+        string += "("
+      for i, factor in enumerate(denominator_factors):
+        string += factor.pretty_str(ASTProduct.precidence)
+        if i < len(denominator_factors) - 1:
+          string += "*"
+      if use_parentheses:
+        string += ")"
     
     if precidence < ASTProduct.precidence:
       string = "(" + string + ")"

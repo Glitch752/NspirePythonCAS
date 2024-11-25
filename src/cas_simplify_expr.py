@@ -40,6 +40,7 @@ class ExpressionReducer:
       common_factors = set(self.terms[0].terms)
       for term in self.terms[1:]:
         common_factors.intersection_update(term.terms)
+      
       if len(common_factors) > 0:
         self.common_terms.extend(common_factors)
         for term in self.terms:
@@ -87,7 +88,8 @@ class ExpressionReducer:
       return ASTNumber(0)
     
     if self.state.sort_terms:
-      terms.sort(key=lambda x: x.__str__())
+      terms.sort(key=lambda x: x.sort_str())
+      print(terms)
     
     if len(terms) == 1:
       return terms[0]
@@ -95,13 +97,15 @@ class ExpressionReducer:
     return ASTProduct(terms)
 
 class ExpressionTerm:
-  def __init__(self, terms, state):
+  def __init__(self, term, state):
     self.state = state
 
-    if isinstance(terms, list):
-      self.terms = terms
+    if isinstance(term, ASTProduct):
+      self.terms = term.factors
+    elif isinstance(term, list):
+      self.terms = term
     else:
-      self.terms = [terms]
+      self.terms = [term]
     
     self.compute_constant()
   
@@ -146,4 +150,8 @@ class ExpressionTerm:
     if self.state.sort_terms:
       self.terms.sort(key=lambda x: x.__str__())
     
+    if self.constant == 1:
+      if len(self.terms) == 1:
+        return self.terms[0]
+      return ASTProduct(self.terms)
     return ASTProduct([ASTNumber(self.constant)] + self.terms)

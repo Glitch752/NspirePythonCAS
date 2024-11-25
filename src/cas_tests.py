@@ -8,7 +8,7 @@ cas_settings.USE_RATIONALS = True
 QUIET = False
 COLLAPSE_CATEGORIES = False
 TIME_TESTS = True
-ERROR_ON_FAIL = False
+ERROR_ON_FAIL = True
 
 # Some tests use test values, some use equality checking after loosely sorting the AST representation.
 # There may be a more robust way to do this, but this is good enough for now.
@@ -16,6 +16,7 @@ ERROR_ON_FAIL = False
 total_tests = 0
 passed_tests = 0
 
+passed_tests_in_category = 0
 tests_in_category = 0
 current_category = ""
 
@@ -25,8 +26,9 @@ collapsed_category_tests = 0
 category_start_time = None
 
 def test_category(name):
-  global tests_in_category, current_category, category_start_time
+  global passed_tests_in_category, tests_in_category, current_category, category_start_time
   tests_in_category = 0
+  passed_tests_in_category = 0
   current_category = name
   if not QUIET:
     print("\n" + name + ":")
@@ -34,25 +36,32 @@ def test_category(name):
     from time import time
     category_start_time = time()
 def test_end_category():
-  global tests_in_category, current_category, current_collapsed_category, category_start_time
+  global passed_tests_in_category, tests_in_category, current_category, current_collapsed_category, category_start_time
   current_collapsed_category = None
   if QUIET:
     print("")
-  print(
-    " " + current_category + ": " + \
-    str(tests_in_category) + "/" + str(tests_in_category) + " passed!",
-    end=""
-  )
+  if passed_tests_in_category == tests_in_category:
+    print(
+      " " + current_category + ": All " + str(tests_in_category) + " tests passed!",
+      end=""
+    )
+  else:
+    print(
+      " " + current_category + ": Only " + \
+      str(passed_tests_in_category) + "/" + str(tests_in_category) + " tests passed.",
+      end=""
+    )
   if TIME_TESTS:
     from time import time
     print(" Time: " + str(round(time() - category_start_time, 2)) + "s", end="")
   print("")
 
 def test_pass(name):
-  global total_tests, passed_tests, tests_in_category, current_collapsed_category, collapsed_category_tests
+  global total_tests, passed_tests, passed_tests_in_category, tests_in_category, current_collapsed_category, collapsed_category_tests
   total_tests += 1
   passed_tests += 1
   
+  passed_tests_in_category += 1
   tests_in_category += 1
   if current_collapsed_category != None:
     collapsed_category_tests += 1
@@ -63,7 +72,7 @@ def test_pass(name):
     print("  Test '" + name + "' passed!")
 
 def test_fail(name):
-  global total_tests,tests_in_category
+  global total_tests, tests_in_category
   total_tests += 1
   tests_in_category += 1
   # TODO: Many messages don't even account for failed tests lol
@@ -361,12 +370,12 @@ def readable_string_tests():
   
   # We print Euler's number as "e" and pi as "π".
   test_result_str("E+E", "e+e", "Euler's number")
-  test_result_str("pi*2*pi", "2ππ", "Pi")
+  test_result_str("2*pi*pi", "2ππ", "Pi")
   
-  test_result_str("x*x", "x*x", "Multiplication compaction")
+  test_result_str("2*4*x*x", "2*4x*x", "Multiplication compaction")
   test_result_str("10.512", "1314/125" if cas_settings.USE_RATIONALS else "10.512", "Decimal numbers as rationals")
   test_result_str("(15)*(x+1)", "15(x+1)", "Parentheses for precedence")
-  test_result_str("(2^3)*x", "2^3*x", "Multiplication operator insertion")
+  test_result_str("(2^3)*x", "2^3x", "Multiplication operator insertion")
   test_result_str("(2*y)/(3*x*z)", "2y/(3x*z)", "Division precedence")
   test_result_str("(5)-(3+1)", "5-(3+1)", "Subtraction precedence")
   test_result_str("3*sin(2*x)", "3sin(2x)", "Function printing")
@@ -395,7 +404,7 @@ readable_string_tests()
 def exact_simplification_tests():
   test_category("Exact simplification tests")
   test_result_str("5*x*x + 10*x", "5(x+2)x", "Extract common factors", simplify=True, sort=True)
-  test_result_str("3*x*y + 2*x*y", "x*5y", "Combine like terns", simplify=True, sort=True)
+  test_result_str("3*x*y + 2*x*y", "5x*y", "Combine like terns", simplify=True, sort=True)
   test_result_str("3 - 4 + x*x - 2*x + 4*x*x + 3*x", "5x*x+x-1", "Simplify larger polynomial", simplify=True, sort=True)
   test_result_str("sin(6/(2*x))", "sin(3/x)", "Simplify function arguments", simplify=True, sort=True)
   test_result_str("3*x*x - 3*x - 9", "3(x*x-x-3)", "GCD doesn't break on edge cases", simplify=True)

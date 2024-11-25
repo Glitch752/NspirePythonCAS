@@ -54,6 +54,7 @@ You should also be able to run it with the Windows or Unix ports of [MicroPython
 - [ ] Add support for integrals (probably not going to happen)
 - [ ] Add support for limits (probably not going to happen)
 - [ ] Add support for complex numbers (probably not going to happen)
+- [ ] Cache operation results (particularly is_constant and simplification) because they're called a ridiculous number of times
 
 # Note
 I'm not certain the simplification or differentiation are perfect, so I wouldn't trust this for anything important yet. I've extensively compared its outputs to those of Wolfram|Alpha, though, and it seems to be correct.
