@@ -1,5 +1,6 @@
 from cas_ast import *
 from math import *
+from cas_functions import ASTFunctionCall
 from cas_rational import gcd
 import cas_settings
 
@@ -11,6 +12,10 @@ class ExpressionReducer:
     self.terms = [ExpressionTerm(term, state) for term in terms]
   
   def reduce(self):
+    # Reduce children
+    for i in range(len(self.terms)):
+      self.terms[i] = self.terms[i].reduce()
+    
     # Remove 0 terms
     i = 0
     while i < len(self.terms):
@@ -75,7 +80,7 @@ class ExpressionReducer:
       return ASTNumber(0)
     
     if self.state.sort_terms:
-      parts.sort(key=lambda x: x.__str__())
+      parts.sort(reverse=True,key=lambda x: x.sort_position())
     
     terms = []
     if len(self.common_terms) > 0:
@@ -88,8 +93,7 @@ class ExpressionReducer:
       return ASTNumber(0)
     
     if self.state.sort_terms:
-      terms.sort(key=lambda x: x.sort_str())
-      print(terms)
+      terms.sort(key=lambda x: x.__str__())
     
     if len(terms) == 1:
       return terms[0]
@@ -114,6 +118,24 @@ class ExpressionTerm:
   def __repr__(self):
     return self.__str__()
   
+  # This is a bit hacky, but it mostly works well enough
+  # Higher numbers are sorted to the front
+  def sort_position(self):
+    sort_precedence = {
+      ASTNumber: 5,
+      ASTVariable: 10,
+      ASTFunctionCall: 0,
+      ASTPower: 20,
+      ASTSum: 30,
+      ASTProduct: 40,
+      ASTLogarithm: 50,
+    }
+    return \
+      len(self.terms) * 100 +\
+      sum([sort_precedence[type(term)] for term in self.terms]) +\
+      (105 if self.constant != 1 else 0) -\
+      (1000 if self.constant < 0 else 0)
+  
   def negate(self):
     self.constant *= -1
     return self
@@ -135,6 +157,23 @@ class ExpressionTerm:
         self.constant *= term.number
         self.terms.pop(i)
         i -= 1
+      
+      if isinstance(term, ASTPower) and term.exponent.is_exactly(-1):
+        base = term.base
+        if base.is_number():
+          self.constant /= base.number
+          self.terms.pop(i)
+        elif isinstance(base, ASTProduct):
+          # TODO Recursively extract constant
+          # This is also a total mess lol
+          non_constant_base_factors = []
+          for factor in base.factors:
+            if isinstance(factor, ASTNumber):
+              self.constant /= factor.number
+            else:
+              non_constant_base_factors.append(factor)
+          self.terms[i] = ASTPower(ASTProduct(non_constant_base_factors), ASTNumber(-1))
+
       i += 1
   
   def reduce(self):

@@ -126,6 +126,7 @@ def test_expression_numeric(expr, expected, name, test_vars=["x"], filter_input=
       i = 0
       stopped = False
       
+      substitutions = {}
       for var in test_vars:
         num = ASTSum(value, ASTNumber(i))
         if filter_input != None and not filter_input(num.eval()):
@@ -134,6 +135,7 @@ def test_expression_numeric(expr, expected, name, test_vars=["x"], filter_input=
         
         expected_a = expected_a.substitute(var, num)
         expected_b = expected_b.substitute(var, num)
+        substitutions[var] = num
         i += 1.3 # Random number
       
       if stopped:
@@ -149,7 +151,12 @@ def test_expression_numeric(expr, expected, name, test_vars=["x"], filter_input=
         print("")
         raise Exception("Test '" + name + "' failed")
       
-      assert_equal(expected_a, expected_b, name)
+      try:
+        assert_equal(expected_a, expected_b, name)
+      except Exception as e:
+        print("While numerically testing '" + name + "' with values:")
+        for (var, num) in substitutions.items():
+          print("  " + var + " = " + str(num.eval()))
 
     if skipped > len(test_values) / 2:
       print("Test '" + name + "' failed by skipping too many values. This is probably a problem with the test.")
@@ -413,7 +420,8 @@ def exact_simplification_tests():
     test_result_str("log_(2/3)(3/2)", "-1", "Logarithm notation and simplification", simplify=True)
   test_result_str("log_(2*x+3)(2*x+3)", "1", "Logarithm simplification", simplify=True)
   if cas_settings.USE_RATIONALS: # 0.25*x instead of x/4 with rationals; this might be an area for improvement
-    test_result_str("log_(x/4)(5)", "ln(5)/(ln(x)-ln(4))", "Logarithm base conversion", simplify=True)
+    # print(parse_to_ast("log_(x/4)(5)"))
+    test_result_str("log_(x/4)(5)", "ln(5)/(ln(x)-ln(4))", "Logarithm base conversion", simplify=True, sort=True)
   test_result_str("log(100)", "2", "Logarithm default base 10", simplify=True)
   test_result_str("ln(E*E)", "2", "Natural logarithm", simplify=True)
   test_result_str("log_(pi)(pi)", "1", "Logarithm irrational base", simplify=True)

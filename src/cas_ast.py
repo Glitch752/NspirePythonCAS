@@ -52,8 +52,6 @@ class ASTNode:
     raise Exception("Implement me!")
   def __repr__(self):
     return self.__str__()
-  def sort_str(self):
-    return self.__str__()
   
   def negate(self):
     return ASTProduct(ASTNumber(-1), self)
@@ -269,9 +267,10 @@ class ASTSum(ASTNode):
 
   def reduce(self, original_state):
     state = original_state.after(self)
-
+    
     # TODO: Combine with ExpressionReducer and refactor; this is a hack to get tests working for now
     new_terms = [term.reduce(state) for term in self.terms]
+    
     # Merge constants
     constant = 0
     i = 0
@@ -389,20 +388,6 @@ class ASTProduct(ASTNode):
     state = original_state.after(self)
 
     new_factors = [factor.reduce(state) for factor in self.factors]
-    # Merge constantss
-    # TODO: Combine with ExpressionReducer and refactor; this is a hack to get tests working for now
-    constant = 1
-    i = 0
-    while i < len(new_factors):
-      if new_factors[i].is_number():
-        constant *= new_factors[i].number
-        new_factors.pop(i)
-      else:
-        i += 1
-    if constant == 0:
-      return ASTNumber(0)
-    if constant != 1:
-      new_factors.append(ASTNumber(constant))
     
     from cas_simplify_expr import ExpressionTerm
     reduced = ExpressionTerm(new_factors, state).reduce().to_ast()
@@ -611,7 +596,6 @@ class ASTLogarithm(ASTNode):
       return ASTNumber(0)
     
     if base.is_number() and argument.is_number():
-      import cas_settings
       import math
 
       if cas_settings.USE_RATIONALS:
@@ -637,6 +621,13 @@ class ASTLogarithm(ASTNode):
           ASTLn(base)
         ).reduce(state)
       
+      # log_b(rational a/c) = log_b(a) - log_b(c)
+      if cas_settings.USE_RATIONALS and isinstance(argument, ASTNumber) and argument.number.denominator != 1:
+        return ASTSum.subtract(
+          ASTLogarithm(base, ASTNumber(argument.number.numerator)),
+          ASTLogarithm(base, ASTNumber(argument.number.denominator))
+        )
+      
       # log_b(a^c) = c * log_b(a)
       if isinstance(argument, ASTPower):
         return ASTProduct(
@@ -644,24 +635,9 @@ class ASTLogarithm(ASTNode):
           ASTLogarithm(base, argument.base)
         ).reduce(state)
       
-      # Lol this is so bad
-      # TODO: Fix whatever this is lol
-      
-      # log_b(a * c) = log_b(a) + log_b(c)
+      # log_b(a * c + ...) = log_b(a) + log_b(c) + ...
       if isinstance(argument, ASTProduct):
-        # TODO: This is really really bad code that breaks under a bunch of circumstances
-        if argument.factors[0].is_number() and isinstance(argument.factors[0].number, Rational) and argument.factors[0].number.denominator != 1:
-          numerator = ASTProduct.divide(ASTNumber(argument.factors[0].number.numerator), argument.factors[1])
-          denominator = ASTNumber(argument.factors[0].number.denominator)
-          return ASTSum.subtract(
-            ASTLogarithm(base, numerator),
-            ASTLogarithm(base, denominator)
-          ).reduce(state)
-        
-        return ASTSum(
-          ASTLogarithm(base, argument.factors[0]),
-          ASTLogarithm(base, argument.factors[1])
-        ).reduce(state)
+        return ASTSum([ASTLogarithm(base, factor) for factor in argument.factors]).reduce(state)
     
     return ASTLogarithm(base, argument)
 
